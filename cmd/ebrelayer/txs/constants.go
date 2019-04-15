@@ -7,4 +7,7 @@ const (
 	FlagValidatorPassword    = "spam-password"
 	FlagChainID         		 = "chain-id"
 	FlagNode            		 = "node"
+	FlagSender            	 = "sender"
+	FlagReceiver             = "receiver"
+	FlagAmount            	 = "amount"
 )

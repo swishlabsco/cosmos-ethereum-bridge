@@ -11,6 +11,7 @@ import (
     "github.com/ethereum/go-ethereum/common"
     "github.com/ethereum/go-ethereum/core/types"
     "github.com/ethereum/go-ethereum/ethclient"
+    "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/txs"
 )
 
 type LogLock struct {
@@ -74,8 +75,10 @@ func start() {
                 fmt.Printf("Cosmos Recipient: %s\n", lockEvent.CosmosRecipient.Hex())
                 fmt.Printf("Amount: %d\n", lockEvent.Value)
 
-                // TODO: Send lockEvent to Cosmos tx generator
-                // txs.relay.relay(lockEvent)
+                // TODO: Proper formatting to send this instruction to tx.relay()
+                GetRelayCmd("chain-id %s --relay-password %s --sender %s --receiver %s --amount %d",
+                    "genesis-alpha", 12345678,
+                    lockEvent.EthereumSender.Hex(),lockEvent.CosmosRecipient.Hex(), lockEvent.Value)
             }
         }
     }
