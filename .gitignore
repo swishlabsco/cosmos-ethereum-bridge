@@ -13,3 +13,7 @@ build
 # IDE
 .idea/
 *.iml
+
+# Ethereum Contracts
+ethereum-contracts/build/
+ethereum-contracts/node_modules/
