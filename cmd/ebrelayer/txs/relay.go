@@ -41,99 +41,71 @@ type relayCtx struct {
 // Parses cmd line arguments, constructs relay context, requests validator
 // creation and once available, relays the transaction to the oracle. 
 // -------------------------------------------------------------------------
-func GetRelayCmd(cdc *wire.Codec) func(cmd *cobra.Command, args []string) error {
+func initRelayer(cdc *wire.Codec) func(args []string) error {
   // Parse chain's ID
-  return func(_ *cobra.Command, _ []string) error {
-    chainID := viper.GetString(FlagChainID)
-    if chainID == "" {
-      return fmt.Errorf("--chain-id is required")
-    }
-
-    // Parse rate limit
-    rateLimit := viper.GetFloat64(FlagRateLimit)
-
-    // Parse validator prefix and password
-    validatorPrefix := viper.GetString(FlagValidatorPrefix)
-    validatorPassword := viper.GetString(FlagValidatorPassword)
-    if validatorPassword == "" {
-      return fmt.Errorf("--relay-password is required")
-    }
-
-    stats := stats.NewStats()
-
-    // Parse the ethereum sender
-    ethereumSender, err := viper.GetString(FlagSender)
-    if err != nil {
-      return err
-    }
-    if ethereumSender == "" {
-      err = fmt.Errorf("--sender is required")
-      return
-    }
-
-    // Parse the cosmos receiver
-    cosmosReceiver, err := viper.GetString(FlagReceiver)
-    if err != nil {
-      return err
-    }
-    if cosmosReceiver == "" {
-      err = fmt.Errorf("--receiver is required")
-      return
-    }
-
-    // Parse the transaction amount
-    amount, err := viper.GetFloat64(FlagAmount)
-    if err != nil {
-      return err
-    }
-    if amount == "" {
-      err = fmt.Errorf("--amount is required")
-      return
-    }
-
-    // Construct the relay context
-    relayCtx := relayCtx{chainID, &stats, ethereumSender, cosmosReceiver, amount}
-
-    // Create context and all validator objects
-    validators, err := createValidators(&relayCtx, cdc, validatorPrefix, validatorPassword)
-    if err != nil {
-      return err
-    }
-
-    // Must have at least 1 available validator
-    if len(validators) == 0 {
-      return fmt.Errorf("no validators are online")
-    }
-
-    log.Log.Infof("Found %v validator accounts\n", len(validators))
-
-    // Use all cores
-    runtime.GOMAXPROCS(runtime.NumCPU())
-
-    // Rate limiter to allow x events per second
-    limiter := time.Tick(time.Duration(rateLimit) * time.Millisecond)
-
-    // Go routine which prints current relay status
-    go doEvery(1*time.Second, relayCtx.stats.Print)
-
-    i := 0
-
-    // Go routine where each validator relays the transaction 
-    for {
-      <-limiter
-      nextValidator := validators[(i+1)%len(validators)]
-      go validators[i].relay(&relayCtx, &nextValidator)
-      if i == len(validators)-1 {
-        i = 0
-      } else {
-        i++
-      }
-    }
+  chainID := args[0]
+  if chainID == "" {
+    return fmt.Errorf("Must specify chain id")
   }
+
+  // Parse validator prefix
+  validatorPrefix := args[1]
+
+  //TODO: Sanitize input
+  // Parse validator password
+  validatorPassword := args[2]
+  if validatorPassword == "" {
+    return fmt.Errorf("Must specify validator password")
+  }
+
+  // Parse ethereum sender
+  ethereumSender := args[3]
+  if ethereumSender == "" {
+    err = fmt.Errorf("Invalid ethereum sender")
+    return
+  }
+
+  // Parse the cosmos receiver
+  cosmosReceiver := args[4]
+  if ethereumSender == "" {
+    err = fmt.Errorf("Invalid Cosmos receiver")
+    return
+  }
+
+  // Parse the transaction amount
+  amount := args[5]
+  if amount == "" {
+    err = fmt.Errorf("Must specify the amount locked")
+    return
+  }
+
+  // Create new stats
+  stats := stats.NewStats()
+
+  // Construct the relay context
+  relayCtx := relayCtx{chainID, &stats, ethereumSender, cosmosReceiver, amount}
+
+  // Create validator thread
+  accountName := info.GetName()
+  validator Validator; 
+  if strings.HasPrefix(accountName, validatorPrefix) {
+    validator, err = spawnValidator(relayCtx, cdc, validatorPassword, kb, info, &validator)
+  } else {
+    log.Log.Warningf("Error while spawning validator %v\n", err)
+    relayCtx.stats.AddError()
+    return;
+  }
+
+  // Prints current relay stats at regular intervals
+  go doEvery(1*time.Second, relayCtx.stats.Print)
+
+  // Validator attempts to relay this transaction
+  go validators[i].relay(&relayCtx)
 }
 
+
 // -------------------------------------------------------------------------
-// Applies the specified time delay to a go routine
+// Applies time delay to go routine
 // -------------------------------------------------------------------------
 func doEvery(d time.Duration, f func()) {
   for range time.Tick(d) {
@@ -149,9 +121,7 @@ type Validator struct {
   password       string
   accountAddress sdk.AccAddress
   cdc            *wire.Codec
-  index          int
   nextSequence   int64
-  nonce          int //TODO: apply nonce
   cliCtx         context.CLIContext
   txCtx          authctx.TxContext
   priv           tmcrypto.PrivKey
@@ -163,38 +133,44 @@ type Validator struct {
 // -------------------------------------------------------------------------
 // This function builds, signs, and broadcasts txs for a single validator
 // -------------------------------------------------------------------------
-func (vl *Validator) relay(relayCtx *relayCtx, nextValidator *Validator) {
+func (vl *Validator) relay(relayCtx *relayCtx) {
   <-vl.queryFree
 
-  log.Log.Debugf("Validator %v: relay with sequence %v...\n", vl.index, vl.nextSequence)
+  log.Log.Debugf("Validator attempting to relay with sequence %v...\n", vl.nextSequence)
 
+  // Make a bridge claim using the context
   var msg sdk.Msg
   var ok bool
-
   msg, ok = vl.makeBridgeClaim(relayCtx)
 
-  // If msg construction returned an error, move to the next validator
+  // If msg construction returned an error, return
   if !ok {
-    vl.updateSequence()
-    vl.queryFree <- true
-    return
-  }
-
-  vl.txCtx = vl.txCtx.WithSequence(vl.nextSequence)
-
-  _, err := helpers.PrivBuildSignAndBroadcastMsg(vl.cdc, vl.cliCtx, vl.txCtx, vl.priv, msg)
-
-  vl.nextSequence = vl.nextSequence + 1
-  vl.sequenceCheck = vl.sequenceCheck + 1
-
-  if err != nil {
-    log.Log.Warningf("Validator %v: Received error trying to relay: %v\n", vl.index, err)
+    log.Log.Warningf("Validator received error while making bridge claim: %v\n", err)
     relayCtx.stats.AddError()
     vl.updateSequence()
     vl.queryFree <- true
     return
   }
-  log.Log.Debugf("Validator %v: Sending successful\n", vl.index)
+
+  // Get the transaction context at validator's current sequence
+  vl.txCtx = vl.txCtx.WithSequence(vl.nextSequence)
+
+  // Build transaction, sign with private key, and broadcast to network
+  _, err := helpers.PrivBuildSignAndBroadcastMsg(vl.cdc, vl.cliCtx, vl.txCtx, vl.priv, msg)
+
+  // Increment sequence/nonce
+  vl.nextSequence = vl.nextSequence + 1
+  vl.sequenceCheck = vl.sequenceCheck + 1
+
+  if err != nil {
+    log.Log.Warningf("Validator received error trying to relay: %v\n", err)
+    relayCtx.stats.AddError()
+    vl.updateSequence()
+    vl.queryFree <- true
+    return
+  }
+
+  log.Log.Debugf("Validator sending successful\n")
   relayCtx.stats.AddSuccess()
 
   vl.queryFree <- true
@@ -256,49 +232,15 @@ func (vl *Validator) updateSequence() {
 }
 
 // -------------------------------------------------------------------------
-// Starts multiple validator go routines
+// Creates an individual validator account
 // -------------------------------------------------------------------------
-func createValidators(relayCtx *relayCtx, cdc *wire.Codec, validatorPrefix string, validatorPassword string) ([]Validator, error) {
-  kb, err := keys.GetKeyBase()
-  if err != nil {
-    return nil, err
-  }
+func (vl *Validator) spawnValidator(
+  relayCtx *relayCtx, cdc *wire.Codec, validatorPassword string,
+  kb cryptokeys.Keybase, info cryptokeys.Info) {
 
-  infos, err := kb.List()
-  if err != nil {
-    return nil, err
-  }
+  log.Log.Debugf("Spawning a validator...")
 
-  var wg sync.WaitGroup
-  semaphore := make(chan bool, 50)
-  var validators []Validator
-  var j = -1
-  for _, info := range infos {
-    accountName := info.GetName()
-    if strings.HasPrefix(accountName, validatorPrefix) {
-      j++
-      wg.Add(1)
-      semaphore <- true
-      go spawnValidator(relayCtx, cdc, validatorPassword, j, kb, info, &validator, &wg, semaphore)
-    }
-  }
-
-  wg.Wait()
-
-  return validators, nil
-}
-// -------------------------------------------------------------------------
-// Creates an individual validator account and adds it to the validators
-// array, printing each step of the process to the console
-// -------------------------------------------------------------------------
-func spawnValidator(relayCtx *relayCtx, cdc *wire.Codec, validatorPassword string, index int, kb cryptokeys.Keybase,
-  info cryptokeys.Info, validators *[]Validator, wg *sync.WaitGroup,
-  semaphore <-chan bool) {
-  defer wg.Done()
-
-  log.Log.Debugf("Validator %v: Spawning...\n", index)
-
-  log.Log.Debugf("Validator %v: Making contexts...\n", index)
+  log.Log.Debugf("Making contexts...\n")
 
   cliCtx := context.NewCLIContext().
     WithCodec(cdc).
@@ -311,13 +253,12 @@ func spawnValidator(relayCtx *relayCtx, cdc *wire.Codec, validatorPassword strin
     ChainID: spamCtx.chainID,
   }
 
-  log.Log.Debugf("Validator %v: Finding account...\n", index)
+  log.Log.Debugf("Validating account...\n")
 
   address := sdk.AccAddress(info.GetPubKey().Address())
   account, err3 := cliCtx.GetAccount(address)
   if err3 != nil {
-    log.Log.Errorf("Validator %v: Account not found, skipping\n", index)
-    <-semaphore
+    log.Log.Errorf("Validator account address check failed: %s\n", err3)
     return
   }
 
@@ -330,15 +271,12 @@ func spawnValidator(relayCtx *relayCtx, cdc *wire.Codec, validatorPassword strin
     panic(err)
   }
 
-  queryFree := make(chan bool, 1)
-  queryFree <- true
-
   newValidator := Validator{
-    info.GetName(), validatorPassword, address, cdc, index, account.GetSequence(), cliCtx, txCtx, priv,
-    account.GetCoins(), 0, queryFree,
+    info.GetName(), validatorPassword, address, cdc, account.GetSequence(),
+    cliCtx, txCtx, priv, account.GetCoins(), 0, queryFree,
   }
 
-  *validators = append(*validators, newValidator)
-  log.Log.Infof("Validator %v: Spawned...\n", index)
-  <-semaphore
+  log.Log.Infof("Validator %s spawned...\n", address)
+
+  return newValidator
 }
