@@ -51,7 +51,6 @@ func main() {
     RunE:  txs.GetRelayCmd(cdc),
   }
 
-  relayCmd.Flags().Float64(txs.FlagRateLimit, 200, "Time to wait between sending in ms")
   relayCmd.Flags().String(txs.FlagValidatorPrefix, "validator", "Prefix for the name of validator account keys")
   relayCmd.Flags().String(txs.FlagValidatorPassword, "", "Password for validator account keys")
   relayCmd.Flags().String(txs.FlagChainID, "", "Chain ID of tendermint node")
