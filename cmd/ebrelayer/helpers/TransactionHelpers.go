@@ -3,14 +3,18 @@ package helpers
 import (
 	"github.com/cosmos/cosmos-sdk/client/context"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/wire"
+	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/x/auth"
-	authctx "github.com/cosmos/cosmos-sdk/x/auth/client/context"
+  authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
+	clientrest "github.com/cosmos/cosmos-sdk/client/rest"
+
 	tmcrypto "github.com/tendermint/tendermint/crypto"
 )
 
+// clientrest.WriteGenerateStdTxResponse(w, cdc, cliCtx, baseReq, []sdk.Msg{msg})
+
 // Build, sign and broadcast a message with a keybase accountName and password
-func BuildSignAndBroadcastMsg(cdc *wire.Codec, cliCtx context.CLIContext, txCtx authctx.TxContext, accountName string,
+func BuildSignAndBroadcastMsg(cdc *codec.Codec, cliCtx context.CLIContext, txCtx authcmd.stdTx, accountName string,
 	password string, msg sdk.Msg) ([]byte, error) {
 	// build and sign
 	txBytes, err := txCtx.BuildAndSign(accountName, password, []sdk.Msg{msg})
@@ -24,7 +28,7 @@ func BuildSignAndBroadcastMsg(cdc *wire.Codec, cliCtx context.CLIContext, txCtx 
 		return nil, err
 	}
 
-	output, err := wire.MarshalJSONIndent(cdc, res)
+	output, err := codec.MarshalJSONIndent(cdc, res)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +36,7 @@ func BuildSignAndBroadcastMsg(cdc *wire.Codec, cliCtx context.CLIContext, txCtx 
 }
 
 // Build, sign and broadcast a message with a private key, not using account from keybase
-func PrivBuildSignAndBroadcastMsg(cdc *wire.Codec, cliCtx context.CLIContext, txCtx authctx.TxContext,
+func PrivBuildSignAndBroadcastMsg(cdc *codec.Codec, cliCtx context.CLIContext, txCtx authcmd.stdTx,
 	priv tmcrypto.PrivKey, msg sdk.Msg) ([]byte, error) {
 	// build
 	stdSignMsg, err := txCtx.Build([]sdk.Msg{msg})
@@ -52,7 +56,7 @@ func PrivBuildSignAndBroadcastMsg(cdc *wire.Codec, cliCtx context.CLIContext, tx
 		return nil, err
 	}
 
-	output, err := wire.MarshalJSONIndent(cdc, res)
+	output, err := codec.MarshalJSONIndent(cdc, res)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +64,7 @@ func PrivBuildSignAndBroadcastMsg(cdc *wire.Codec, cliCtx context.CLIContext, tx
 }
 
 //Sign a transaction with a given private key
-func privSign(txCtx authctx.TxContext, priv tmcrypto.PrivKey, msg auth.StdSignMsg) ([]byte, error) {
+func privSign(txCtx authcmd.stdTx, priv tmcrypto.PrivKey, msg auth.StdSignMsg) ([]byte, error) {
 	sig, err := priv.Sign(msg.Bytes())
 	if err != nil {
 		return nil, err

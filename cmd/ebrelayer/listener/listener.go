@@ -26,16 +26,13 @@ type LogLock struct {
 // -------------------------------------------------------------------------
 func start() {
     // Start client with infura ropsten provider
-    // TODO: provider support for different chains with 'FlagNetwork'
     client, err := ethclient.Dial("wss://ropsten.infura.io/ws")
     if err != nil {
         log.Fatal(err)
     }
 
     // Deployed contract address and event signature
-    // TODO: different multiple contracts with 'FlagContract'
     contractAddress := common.HexToAddress("0xe56143b75f4eeac5fa80dc6ffd912d4a3ed21fdf")
-    // TODO: support multiple events with 'FlagEventSig'
     logLockSig := []byte("LogLock(address,address,uint256)")
     logLockEvent := crypto.Keccak256Hash(logLockSig)
 
