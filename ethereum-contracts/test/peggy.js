@@ -103,6 +103,7 @@ contract('Peggy', function(accounts) {
       assert.strictEqual(String(res.logs[0].args.to), '0xdeadbeef');
       assert.strictEqual(res.logs[0].args.token, standardTokenMock.address);
       assert.strictEqual(res.logs[0].args.value.toNumber(), 1000);
+      assert.strictEqual(res.logs[0].args.nonce.toNumber(), 1);
     });
 
 
@@ -114,9 +115,9 @@ contract('Peggy', function(accounts) {
       await peggy.newCosmosERC20('ATOMS', 18, signatures.signers, signatures.vArray, signatures.rArray, signatures.sArray);      
       let cosmosToken = await CosmosERC20.at(cosmosTokenAddress);
       
-      hashData = await peggy.hashUnlock(_account_one, cosmosTokenAddress, 1000);
+      hashData = await peggy.hashUnlock(_account_one, cosmosTokenAddress, 1000, 0);
       signatures = await utils.createSigns(validators, hashData);
-      await peggy.unlock(_account_one, cosmosTokenAddress, 1000, signatures.signers, signatures.vArray, signatures.rArray, signatures.sArray);
+      await peggy.unlock(_account_one, cosmosTokenAddress, 1000, 0, signatures.signers, signatures.vArray, signatures.rArray, signatures.sArray);
 
       let res = await peggy.lock("0xdeadbeef", cosmosTokenAddress, 500, {from: args._account_one});
 
@@ -126,6 +127,7 @@ contract('Peggy', function(accounts) {
       assert.strictEqual(String(res.logs[0].args.to), '0xdeadbeef');
       assert.strictEqual(res.logs[0].args.token, cosmosTokenAddress);
       assert.strictEqual(res.logs[0].args.value.toNumber(), 500);
+      assert.strictEqual(res.logs[0].args.nonce.toNumber(), 1);
     });
 
     it('Sends Ether when token is 0 address and emits Lock event', async function () {
@@ -140,23 +142,55 @@ contract('Peggy', function(accounts) {
       assert.strictEqual(String(res.logs[0].args.to), '0xdeadbeef');
       assert.strictEqual(res.logs[0].args.token, _address0);
       assert.strictEqual(res.logs[0].args.value.toNumber(), 1000);
+      assert.strictEqual(res.logs[0].args.nonce.toNumber(), 1);
     });
+
+    it('Updates nonce on successive lock events', async function () {
+      let res1 = await peggy.lock("0xdeadbeef", _address0, 1000, {from: args._account_one, value: 1000}); 
+      assert.strictEqual(res1.logs[0].args.nonce.toNumber(), 1);
+
+      let res2 = await peggy.lock("0xdeadbeef", _address0, 500, {from: args._account_one, value: 500});
+      assert.strictEqual(res2.logs[0].args.nonce.toNumber(), 2);
+
+      let res3 = await peggy.lock("0xdeadbeef", _address0, 950, {from: args._account_one, value: 950});
+      assert.strictEqual(res3.logs[0].args.nonce.toNumber(), 3);
+    });
+
   });
 
 
-  describe('unlock(address,address,uint64,uint[],uint8[],bytes32[],bytes32[])', function () {
+  describe('unlock(address,address,uint64,uint256,uint[],uint8[],bytes32[],bytes32[])', function () {
     let peggy, res;
 
     beforeEach('Sets up peggy contract', async function () {
       peggy = await Peggy.new(validators.addresses, validators.powers, {from: args._default});
     });
 
-    it('Sends Normal ERC20 and emits Unlock event', async function () {
+    it('Should reject attemps to unlock a hash after it has already been unlocked', async function () {
       let standardTokenMock = await MockERC20Token.new(peggy.address, 10000, {from: args._default});
-      let hashData = await peggy.hashUnlock(_account_one, standardTokenMock.address, 1000);
+      let hashData = await peggy.hashUnlock(_account_one, standardTokenMock.address, 1000, 1);
       let signatures = await utils.createSigns(validators, hashData);
 
-      res = await peggy.unlock(args._account_one, standardTokenMock.address, 1000, signatures.signers, signatures.vArray, signatures.rArray, signatures.sArray);
+      await peggy.unlock(args._account_one, standardTokenMock.address, 1000, 1, signatures.signers, signatures.vArray, signatures.rArray, signatures.sArray);
+      await utils.expectRevert(peggy.unlock(args._account_one, standardTokenMock.address, 1000, 1, signatures.signers, signatures.vArray, signatures.rArray, signatures.sArray));
+
+    });
+
+    it('Should reject attemps to unlock by a non-relayer', async function () {
+      let standardTokenMock = await MockERC20Token.new(peggy.address, 10000, {from: args._default});
+      let hashData = await peggy.hashUnlock(_account_one, standardTokenMock.address, 1000, 1);
+      let signatures = await utils.createSigns(validators, hashData);
+
+      await utils.expectRevert(peggy.unlock(args._account_one, standardTokenMock.address, 1000, 1, signatures.signers, signatures.vArray, signatures.rArray, signatures.sArray, {from: accounts[3]}));
+
+    });
+
+    it('Sends Normal ERC20 and emits Unlock event', async function () {
+      let standardTokenMock = await MockERC20Token.new(peggy.address, 10000, {from: args._default});
+      let hashData = await peggy.hashUnlock(_account_one, standardTokenMock.address, 1000, 1);
+      let signatures = await utils.createSigns(validators, hashData);
+
+      res = await peggy.unlock(args._account_one, standardTokenMock.address, 1000, 1, signatures.signers, signatures.vArray, signatures.rArray, signatures.sArray);
       assert.equal((await standardTokenMock.balanceOf(_account_one)).toNumber(), 1000);
 
       assert.strictEqual(res.logs.length, 1);
@@ -164,6 +198,7 @@ contract('Peggy', function(accounts) {
       assert.strictEqual(String(res.logs[0].args.to), args._account_one);
       assert.strictEqual(res.logs[0].args.token, standardTokenMock.address);
       assert.strictEqual(res.logs[0].args.value.toNumber(), 1000);
+      assert.strictEqual(res.logs[0].args.nonce.toNumber(), 1);
     });
 
     it('Mints Cosmos ERC20 and emits Unlock event', async function () {
@@ -174,10 +209,10 @@ contract('Peggy', function(accounts) {
       await peggy.newCosmosERC20('ATOMS', 18, signatures.signers, signatures.vArray, signatures.rArray, signatures.sArray);      
       let cosmosToken = await CosmosERC20.at(cosmosTokenAddress);
 
-      hashData = await peggy.hashUnlock(_account_one, cosmosTokenAddress, 1000);
+      hashData = await peggy.hashUnlock(_account_one, cosmosTokenAddress, 1000, 1);
       signatures = await utils.createSigns(validators, hashData);
 
-      res = await peggy.unlock(_account_one, cosmosTokenAddress, 1000, signatures.signers, signatures.vArray, signatures.rArray, signatures.sArray);
+      res = await peggy.unlock(_account_one, cosmosTokenAddress, 1000, 1, signatures.signers, signatures.vArray, signatures.rArray, signatures.sArray);
       assert.equal((await cosmosToken.balanceOf(_account_one)).toNumber(), 1000);
 
       assert.strictEqual(res.logs.length, 1);
@@ -185,6 +220,7 @@ contract('Peggy', function(accounts) {
       assert.strictEqual(String(res.logs[0].args.to), args._account_one);
       assert.strictEqual(res.logs[0].args.token, cosmosTokenAddress);
       assert.strictEqual(res.logs[0].args.value.toNumber(), 1000);
+      assert.strictEqual(res.logs[0].args.nonce.toNumber(), 1);
     });
 
     it('Sends Ether when token is address 0x0 and emits Unlock event', async function () {
@@ -193,9 +229,9 @@ contract('Peggy', function(accounts) {
 
       let oldBalance = await web3.eth.getBalance(_account_one);
 
-      let hashData = await peggy.hashUnlock(_account_one, _address0, 1000);
+      let hashData = await peggy.hashUnlock(_account_one, _address0, 1000, 1);
       let signatures = await utils.createSigns(validators, hashData);
-      res = await peggy.unlock(args._account_one, args._address0, 1000, signatures.signers, signatures.vArray, signatures.rArray, signatures.sArray);
+      res = await peggy.unlock(args._account_one, args._address0, 1000, 1, signatures.signers, signatures.vArray, signatures.rArray, signatures.sArray);
 
       assert.equal(Number(await web3.eth.getBalance(_account_one)), Number(oldBalance) + 1000);
 
@@ -204,6 +240,7 @@ contract('Peggy', function(accounts) {
       assert.strictEqual(String(res.logs[0].args.to), args._account_one);
       assert.strictEqual(res.logs[0].args.token, args._address0);
       assert.strictEqual(res.logs[0].args.value.toNumber(), 1000);
+      assert.strictEqual(res.logs[0].args.nonce.toNumber(), 1);
     });
   });
 });

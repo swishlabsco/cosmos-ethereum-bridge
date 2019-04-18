@@ -19,6 +19,7 @@
     "keccak": "^1.4.0",
     "keythereum": "^1.0.4",
     "lodash": "^4.17.10",
+    "openzeppelin-solidity": "^2.2.0",
     "utf8": "^3.0.0"
   }
 }
