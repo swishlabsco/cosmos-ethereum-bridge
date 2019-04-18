@@ -20,10 +20,13 @@ import (
 	bankcmd "github.com/cosmos/cosmos-sdk/x/bank/client/cli"
 	bank "github.com/cosmos/cosmos-sdk/x/bank/client/rest"
 	app "github.com/swishlabsco/cosmos-ethereum-bridge"
+	ethbridgeclient "github.com/swishlabsco/cosmos-ethereum-bridge/x/ethbridge/client"
+	ethbridgerest "github.com/swishlabsco/cosmos-ethereum-bridge/x/ethbridge/client/rest"
 )
 
 const (
-	storeAcc = "acc"
+	storeAcc       = "acc"
+	routeEthbridge = "ethbridge"
 )
 
 var defaultCLIHome = os.ExpandEnv("$HOME/.ebcli")
@@ -40,7 +43,9 @@ func main() {
 	config.SetBech32PrefixForConsensusNode(sdk.Bech32PrefixConsAddr, sdk.Bech32PrefixConsPub)
 	config.Seal()
 
-	mc := []sdk.ModuleClients{}
+	mc := []sdk.ModuleClients{
+		ethbridgeclient.NewModuleClient(routeEthbridge, cdc),
+	}
 
 	rootCmd := &cobra.Command{
 		Use:   "ebcli",
@@ -79,6 +84,7 @@ func registerRoutes(rs *lcd.RestServer) {
 	tx.RegisterRoutes(rs.CliCtx, rs.Mux, rs.Cdc)
 	auth.RegisterRoutes(rs.CliCtx, rs.Mux, rs.Cdc, storeAcc)
 	bank.RegisterRoutes(rs.CliCtx, rs.Mux, rs.Cdc, rs.KeyBase)
+	ethbridgerest.RegisterRoutes(rs.CliCtx, rs.Mux, rs.Cdc, routeEthbridge)
 }
 
 func queryCmd(cdc *amino.Codec, mc []sdk.ModuleClients) *cobra.Command {

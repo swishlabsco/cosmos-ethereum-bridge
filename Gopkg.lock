@@ -2,6 +2,17 @@
 
 
 [[projects]]
+  digest = "1:f96ba6ecca7ba87b1dddd70ae38cfc4ce5ea844f58d1f728e121d2e29cdfb8a2"
+  name = "github.com/allegro/bigcache"
+  packages = [
+    ".",
+    "queue",
+  ]
+  pruneopts = "UT"
+  revision = "84a0ff3f153cbd7e280a19029a864bb04b504e62"
+  version = "v1.2.0"
+
+[[projects]]
   branch = "master"
   digest = "1:09a7f74eb6bb3c0f14d8926610c87f569c5cff68e978d30e9a3540aeb626fdf0"
   name = "github.com/bartekn/go-bip39"
@@ -144,12 +155,27 @@
   version = "v1.1.1"
 
 [[projects]]
-  digest = "1:fed20bf7f0da387c96d4cfc140a95572e5aba4bb984beb7de910e090ae39849b"
+  digest = "1:4b6c22168e042594f56f24fe598f8803ff58c87b3308eb7ce85b726b16d6cdef"
   name = "github.com/ethereum/go-ethereum"
-  packages = ["crypto/secp256k1"]
+  packages = [
+    ".",
+    "common",
+    "common/hexutil",
+    "common/math",
+    "common/prque",
+    "core/types",
+    "crypto",
+    "crypto/secp256k1",
+    "ethdb",
+    "log",
+    "metrics",
+    "params",
+    "rlp",
+    "trie",
+  ]
   pruneopts = "UT"
-  revision = "cdae1c59abc32f85debfa29577fbf1ed036ebf73"
-  version = "v1.8.26"
+  revision = "4bcc0a37ab70cb79b16893556cffdaad6974e7d8"
+  version = "v1.8.27"
 
 [[projects]]
   digest = "1:abeb38ade3f32a92943e5be54f55ed6d6e3b6602761d74b4aab4c9dd45c18abd"
@@ -599,7 +625,7 @@
   version = "v0.8.0"
 
 [[projects]]
-  digest = "1:6f6dc6060c4e9ba73cf28aa88f12a69a030d3d19d518ef8e931879eaa099628d"
+  digest = "1:d066def5c440e778d443a0b98f5dbc6761b9992294621f5d578cec82b1deb9d3"
   name = "golang.org/x/crypto"
   packages = [
     "bcrypt",
@@ -619,6 +645,7 @@
     "poly1305",
     "ripemd160",
     "salsa20/salsa",
+    "sha3",
   ]
   pruneopts = "UT"
   revision = "3764759f34a542a3aef74d6b02e35be7ab893bba"
@@ -748,6 +775,7 @@
     "github.com/cosmos/cosmos-sdk/codec",
     "github.com/cosmos/cosmos-sdk/crypto/keys",
     "github.com/cosmos/cosmos-sdk/server",
+    "github.com/cosmos/cosmos-sdk/store",
     "github.com/cosmos/cosmos-sdk/types",
     "github.com/cosmos/cosmos-sdk/types/rest",
     "github.com/cosmos/cosmos-sdk/x/auth",
@@ -759,9 +787,11 @@
     "github.com/cosmos/cosmos-sdk/x/bank/client/rest",
     "github.com/cosmos/cosmos-sdk/x/params",
     "github.com/cosmos/cosmos-sdk/x/staking",
+    "github.com/ethereum/go-ethereum",
     "github.com/gorilla/mux",
     "github.com/spf13/cobra",
     "github.com/spf13/viper",
+    "github.com/stretchr/testify/require",
     "github.com/tendermint/go-amino",
     "github.com/tendermint/tendermint/abci/types",
     "github.com/tendermint/tendermint/config",
