@@ -1,6 +1,10 @@
 pragma solidity ^0.5.0;
 
+import "./ECDSA.sol";
+
 contract Valset {
+
+    using ECDSA for bytes32;
 
     /* Variables */
 
@@ -13,34 +17,20 @@ contract Valset {
     /* Events */
 
     event Update(address[] newAddresses, uint64[] newPowers, uint indexed seq);
-
-
-    /* Getters (These are supposed to be auto implemented by solidity but aren't ¯\_(ツ)_/¯) */
-
-    function getAddresses()
+    
+    /*
+    * @dev: Constructor, initalizes relayer, initial addresses, and initial powers.
+    *
+    * @param initAddress: Initial addresses to serve as validators.
+    * @param initPowers: Initial validator powers.
+    */    constructor(
+        address[] memory initAddress,
+        uint64[] memory initPowers
+    )
         public
-        view
-        returns (address[] memory)
     {
-        return addresses;
+        updateInternal(initAddress, initPowers);
     }
-
-    function getPowers()
-        public
-        view
-        returns (uint64[] memory)
-    {
-        return powers;
-    }
-
-    function getTotalPower()
-        public
-        view
-        returns (uint64)
-    {
-        return totalPower;
-    }
-
 
     /* Functions */
 
@@ -74,15 +64,45 @@ contract Valset {
             require(signers[i] > signers[i-1]);
           }
           //Signatory address must match the specified validator
-          address recAddr = ecrecover(hash, v[i], r[i], s[i]);
-          require(recAddr == addresses[signers[i]]);
+          if(addresses[signers[i]] == safeRecover(hash, v[i], r[i], s[i])) {
+            //Add this validator's signing power to the total
+            signedPower += powers[signers[i]];
+          } //return hash.toEthSignedMessageHash(); //return hash.recover(signature);
 
-          //Add this validator's signing power to the total
-          signedPower += powers[signers[i]];
         }
         //Combined signing power must be at least 66.6% of total power
         require(signedPower * 3 > totalPower * 2);
         return true;
+    }
+
+    /*
+    * @dev: Safely applies ECDSA to signature recovery
+    *
+    * @param hash: The hashed message which has been signed.
+    * @param v: Component of the decomposed signature.
+    * @param r: Component of the decomposed signature.
+    * @param s: Component of the decomposed signature.
+    */
+    function safeRecover(
+        bytes32 hash,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    )
+        internal
+        pure
+        returns(address)
+    {
+        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+            return address(0);
+        }
+
+        if (v != 27 && v != 28) {
+            return address(0);
+        }
+
+        // If the signature is valid (and not malleable), return the signer address
+        return ecrecover(hash, v, r, s);         
     }
 
     //Set new list of validators and their respective signing power
@@ -136,13 +156,29 @@ contract Valset {
         require(updateInternal(newAddress, newPowers));
     }
 
-    //Sets validators and powers on deployment
-    constructor(
-        address[] memory initAddress,
-        uint64[] memory initPowers
-    )
+    /* Getters */
+
+    function getAddresses()
         public
+        view
+        returns (address[] memory)
     {
-        updateInternal(initAddress, initPowers);
+        return addresses;
+    }
+
+    function getPowers()
+        public
+        view
+        returns (uint64[] memory)
+    {
+        return powers;
+    }
+
+    function getTotalPower()
+        public
+        view
+        returns (uint64)
+    {
+        return totalPower;
     }
 }
