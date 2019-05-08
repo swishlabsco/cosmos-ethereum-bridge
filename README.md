@@ -55,7 +55,7 @@ ebcli query account $(ebcli keys show testuser -a) --trust-node
 
 # Test out the oracle module by submitting a claim for an ethereum prophecy
 # (Ethereum prophecies are stored on the blockchain with an identifier created by concatenating the nonce and sender address)
-ebcli tx oracle make-claim 0 randomethaddress $(ebcli keys show testuser -a) $(ebcli keys show validator -a) 3eth --from validator --chain-id testing --yes
+ebcli tx oracle make-claim 0randomethaddress $(ebcli keys show testuser -a) $(ebcli keys show validator -a) 3eth --from validator --chain-id testing --yes
 
 # Then read the prophecy to confirm it was created with the claim added
 ebcli query oracle get-prophecy 0randomethaddress --trust-node
