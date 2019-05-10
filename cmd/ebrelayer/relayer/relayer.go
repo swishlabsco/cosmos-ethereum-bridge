@@ -30,7 +30,7 @@ type LogLock struct {
 //      provider: "wss://ropsten.infura.io/ws"
 //      peggyContractAddress: "0xe56143b75f4eeac5fa80dc6ffd912d4a3ed21fdf"
 //      eventSignature: "LogLock(address,address,uint256)"
-//      validatorPrefix:
+//      validatorPrefix: "validator"
 //      validatorPassword: "12345678"
 //
 func InitRelayer(
