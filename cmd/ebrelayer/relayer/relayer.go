@@ -1,4 +1,4 @@
-package listener
+package relayer
 
 import (
     "context"
@@ -19,21 +19,43 @@ type LogLock struct {
     EthereumSender         common.Address
     CosmosRecipient        common.Address
     Value                  *big.Int
+    Nonce                  *big.Int
 }
 
 // -------------------------------------------------------------------------
 // Starts an event listener on a specific network, contract, and event
 // -------------------------------------------------------------------------
-func start() {
+// Testing parameters:
+//      chainId: "3"
+//      provider: "wss://ropsten.infura.io/ws"
+//      peggyContractAddress: "0xe56143b75f4eeac5fa80dc6ffd912d4a3ed21fdf"
+//      eventSignature: "LogLock(address,address,uint256)"
+//      validatorPrefix:
+//      validatorPassword: "12345678"
+//
+func InitRelayer(
+    chainId string,
+    provider string,
+    peggyContractAddress string,
+    eventSignature string,
+    validatorPrefix string,
+    validatorPassword string
+) {
+    //Check chain ID
+    if(chainId != "3") {
+        return fmt.Errorf("Only the ropsten network is currently supported (chainId = 3")
+    }
+
     // Start client with infura ropsten provider
-    client, err := ethclient.Dial("wss://ropsten.infura.io/ws")
+     //TODO: Implement geth lcd
+    client, err := ethclient.Dial(provider)
     if err != nil {
         log.Fatal(err)
     }
 
     // Deployed contract address and event signature
-    contractAddress := common.HexToAddress("0xe56143b75f4eeac5fa80dc6ffd912d4a3ed21fdf")
-    logLockSig := []byte("LogLock(address,address,uint256)")
+    contractAddress := common.HexToAddress(peggyContractAddress)
+    logLockSig := []byte(eventSignature)
     logLockEvent := crypto.Keccak256Hash(logLockSig)
 
     // Filter currently captures all events from the contract
@@ -66,16 +88,22 @@ func start() {
                 lockEvent.EthereumSender = common.HexToAddress(vLog.Topics[1].Hex())
                 lockEvent.CosmosRecipient = common.HexToAddress(vLog.Topics[2].Hex())
                 lockEvent.Value = vLog.Topics[3].Big()
+                lockEvent.Nonce = vLog.Topics[4].Big()
 
                 fmt.Printf("Tx Hash: %s\n", lockEvent.TransactionHash)
                 fmt.Printf("Ethereum Sender: %s\n", lockEvent.EthereumSender.Hex())
                 fmt.Printf("Cosmos Recipient: %s\n", lockEvent.CosmosRecipient.Hex())
                 fmt.Printf("Amount: %d\n", lockEvent.Value)
+                fmt.Printf("Nonce: %d\n", lockEvent.Nonce)
 
-                // TODO: Proper formatting to send this instruction to tx.relay()
-                GetRelayCmd("chain-id %s --relay-password %s --sender %s --receiver %s --amount %d",
-                    "genesis-alpha", 12345678,
-                    lockEvent.EthereumSender.Hex(),lockEvent.CosmosRecipient.Hex(), lockEvent.Value)
+                txs.sendRelayTx(
+                    "genesis-alpha",
+                     validatorPrefix,
+                     validatorPassword,
+                     lockEvent.EthereumSender.Hex(),
+                     lockEvent.CosmosRecipient.Hex(),
+                     lockEvent.Value,
+                     lockEvent.Nonce)
             }
         }
     }
