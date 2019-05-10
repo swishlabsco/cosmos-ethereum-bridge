@@ -26,15 +26,15 @@ import (
 
 	app "github.com/swishlabsco/cosmos-ethereum-bridge"
 	"github.com/swishlabsco/cosmos-ethereum-bridge/x/ethbridge"
-	// "github.com/swishlabsco/cosmos-ethereum-bridge/x/oracle"
 )
 
 const (
 	name1 = "validtor1"
 	name2 = "validator2"
 	name3 = "validator99"
-	ethereumAddress = "testEthAddress"
-	cosmosRecipient = "testCosmosAddress"
+	ethereumAddress = "0x7B95B6EC7EbD73572298cEf32Bb54FA408207359"
+	cosmosRecipient = "cosmos1gn8409qq9hnrxde37kuxwx5hrxpfpv8426szuv"
+	testValidator = "cosmos1xdp5tvt7lxh8rf9xx07wy2xlagzhq24ha48xtq"
 	amount = 1500
 	nonce = 5
 	pw    = app.DefaultKeyPass
@@ -196,11 +196,13 @@ func TestMakeBridgeClaim(t *testing.T) {
 	// Check that the claim was created with the correct values
 	claim := getClaim(t, port, claimID)
 	require.Equal(t, ethereumSender, claim.getEthereumSender())
-	require.Equal(t, cosmosRecipient, claim.getEthereumSender())
+	require.Equal(t, cosmosRecipient, claim.getCosmosRecipient())
 	require.Equal(t, amount, claim.getAmount())
 	require.Equal(t, nonce, claim.getNonce())
+	require.Equal(t, testValidator, claim.getValidator())
 
+	// Confirm that this is the account which submitted the claim
 	validator := getValidator(t, port, claimID)
-	require.Equal(t, addr.String(), claim.Validator)
+	require.Equal(t, addr.String(), claim.Validator) 
 	require.Equal(t, claimId, claim.claimID)
 }
