@@ -6,16 +6,16 @@ import (
   "time"
 
   "github.com/cosmos/cosmos-sdk/codec"
-  "github.com/cosmos/cosmos-sdk/x/auth"
+  // "github.com/cosmos/cosmos-sdk/x/auth"
   "github.com/cosmos/cosmos-sdk/client/context"
     tmcrypto "github.com/tendermint/tendermint/crypto"
   "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/helpers"
   sdk "github.com/cosmos/cosmos-sdk/types"
-  authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
-  auth "github.com/cosmos/cosmos-sdk/x/auth/client/rest"
+  // authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
+  // auth "github.com/cosmos/cosmos-sdk/x/auth/client/rest"
   "github.com/swishlabsco/cosmos-ethereum-bridge/x/oracle"
   "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/log"
-  "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/stats"
+  // "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/stats"
   
   // "github.com/cosmos/cosmos-sdk/client"
   // "github.com/cosmos/cosmos-sdk/server"
@@ -33,59 +33,29 @@ var (
 )
 
 type relayCtx struct {
-  // chainID         string
-  // stats           *stats.Stats
+	transactionHash string
   ethereumSender  string
   cosmosReceiver  sdk.AccAddress
   amount          sdk.Coins
+  nonce						*big.Int
 }
 
 // -------------------------------------------------------------------------
 // Parses cmd line arguments, constructs relay context, requests validator
 // creation and once available, relays the transaction to the oracle. 
 // -------------------------------------------------------------------------
-func initRelayer(cdc *codec.Codec) func(args []string) error {
-  // Parse chain's ID
-  // chainID := args[0]
-  // if chainID == "" {
-  //   return fmt.Errorf("Must specify chain id")
-  // }
-
-  // Parse ethereum sender
-  ethereumSender := args[0]
-  if ethereumSender == "" {
-    err = fmt.Errorf("Invalid ethereum sender")
-    return
-  }
-
-  // Parse the cosmos receiver
-  cosmosReceiver := args[1]
-  if ethereumSender == "" {
-    err = fmt.Errorf("Invalid Cosmos receiver")
-    return
-  }
-
-  // Parse the transaction amount
-  amount := args[2]
-  if amount == "" {
-    err = fmt.Errorf("Must specify the amount locked")
-    return
-  }
-
-  // Parse validator prefix
-  validatorPrefix := args[3]
-
-  //TODO: Sanitize input
-  // Parse validator password
-  validatorPassword := args[4]
-  if validatorPassword == "" {
-    return fmt.Errorf("Must specify validator password")
-  }
-  // Create new stats
-  //stats := stats.NewStats()
+func sendRelayTx(
+		cdc 								*codec.Codec,
+    validatorPrefix 		string,
+    validatorPassword 	string,
+    ethereumSender 			string, 
+    cosmosRecipient 		string,
+    value 							*big.Int,
+    nonce 							*big.Int
+  ) {
 
   // Construct the relay context
-  relayCtx := relayCtx{ ethereumSender, cosmosReceiver, amount} //&stats
+  relayCtx := relayCtx{ ethereumSender, cosmosReceiver, amount, nonce}
 
   // Create validator thread
   accountName := info.GetName()
@@ -127,7 +97,7 @@ type Validator struct {
   cdc            *codec.Codec
   nextSequence   int64
   cliCtx         context.CLIContext
-  txCtx          auth.stdTx
+  // txCtx          auth.stdTx
   priv           tmcrypto.PrivKey
   currentCoins   sdk.Coins
   sequenceCheck  int
@@ -150,7 +120,6 @@ func (vl *Validator) relay(relayCtx *relayCtx) {
   // If msg construction returned an error, return
   if !ok {
     log.Log.Warningf("Validator received error while making bridge claim: %v\n", err)
-    // relayCtx.stats.AddError()
     // vl.updateSequence()
     vl.queryFree <- true
     return
@@ -158,6 +127,10 @@ func (vl *Validator) relay(relayCtx *relayCtx) {
 
   // Get the transaction context at validator's current sequence
   vl.txCtx = vl.txCtx.WithSequence(vl.nextSequence)
+
+   // Encode and Broadcast the transaction context with codec
+  // txCtx := EncodeTxRequestHandlerFn(vl.cdc, vl.cliCtx)
+  // handlerFunc = BroadcastTxRequest(vl.cdc, txCtx)
 
   // Build transaction, sign with private key, and broadcast to network
   _, err := helpers.PrivBuildSignAndBroadcastMsg(vl.cdc, vl.cliCtx, vl.txCtx, vl.priv, msg)
@@ -168,14 +141,12 @@ func (vl *Validator) relay(relayCtx *relayCtx) {
 
   if err != nil {
     log.Log.Warningf("Validator received error trying to relay: %v\n", err)
-    // relayCtx.stats.AddError()
-    // vl.updateSequence()
+
     vl.queryFree <- true
     return
   }
 
   log.Log.Debugf("Validator sending successful\n")
-  // relayCtx.stats.AddSuccess()
 
   vl.queryFree <- true
 }
@@ -205,82 +176,8 @@ func (vl *Validator) makeBridgeClaim(relayCtx *relayCtx) (sdk.Msg, bool) {
   msg := oracle.NewMsgMakeBridgeClaim(
     nonce, ethereumSender, cosmosReceiver, validator, amount)
 
-  log.Log.Debugf("Validator %v: made claim of %v->%v an amount of %v\\n",
-    vl.index, ethereumSender, cosmosReceiver, amount)
+  log.Log.Debugf("Validator %v: made claim of %v->%v an amount of %v with nonce %v\\n",
+    vl.index, ethereumSender, cosmosReceiver, amount, nonce)
 
   return msg, true
 }
-
-// // -------------------------------------------------------------------------
-// // This function will be used to update the validator's nonce, inspired
-// // by 'updateSequenceAndCoins()'
-// // -------------------------------------------------------------------------
-// func (vl *Validator) updateSequence() {
-//   log.Log.Debugf("Validator %v: Time to refresh sequence and coins, waiting for next block...\n", vl.index)
-//   time.Sleep(defaultBlockTime * time.Millisecond)
-
-//   log.Log.Debugf("Validator %v: Querying account for new sequence and coins...\n", vl.index)
-//   fromAcc, err := vl.cliCtx.GetAccount(vl.accountAddress)
-//   if err != nil {
-//     log.Log.Errorf("Validator %v: Account not found, skipping\n", vl.index)
-//     return
-//   }
-
-//   sequence, err := vl.cliCtx.GetAccountSequence(vl.accountAddress)
-//   if err != nil {
-//     log.Log.Errorf("Validator %v: Error getting sequence: %v\n", vl.index, err)
-//   }
-//   vl.nextSequence = sequence
-//   log.Log.Debugf("Validator %v: Sequence updated to %v\n", vl.index, vl.nextSequence)
-//   vl.sequenceCheck = 0
-// }
-
-// // -------------------------------------------------------------------------
-// // Creates an individual validator account
-// // -------------------------------------------------------------------------
-// func (vl *Validator) spawnValidator(
-//   relayCtx *relayCtx, cdc *codec.Codec, validatorPassword string,
-//   kb cryptokeys.Keybase, info cryptokeys.Info) {
-
-//   log.Log.Debugf("Spawning a validator...")
-
-//   log.Log.Debugf("Making contexts...\n")
-
-//   cliCtx := context.NewCLIContext().
-//     WithCodec(cdc).
-//     WithAccountDecoder(authcmd.GetAccountDecoder(cdc)).
-//     WithFromAddressName(info.GetName())
-
-//   txCtx := authctx.TxContext{
-//     Codec:   cdc,
-//     Gas:     20000,
-//     ChainID: spamCtx.chainID,
-//   }
-
-//   log.Log.Debugf("Validating account...\n")
-
-//   address := sdk.AccAddress(info.GetPubKey().Address())
-//   account, err3 := cliCtx.GetAccount(address)
-//   if err3 != nil {
-//     log.Log.Errorf("Validator account address check failed: %s\n", err3)
-//     return
-//   }
-
-//   txCtx = txCtx.WithAccountNumber(account.GetAccountNumber())
-//   txCtx = txCtx.WithSequence(account.GetSequence())
-
-//   // get private key
-//   priv, err := kb.ExportPrivateKeyObject(info.GetName(), validatorPassword)
-//   if err != nil {
-//     panic(err)
-//   }
-
-//   newValidator := Validator{
-//     info.GetName(), validatorPassword, address, cdc, account.GetSequence(),
-//     cliCtx, txCtx, priv, account.GetCoins(), 0, queryFree,
-//   }
-
-//   log.Log.Infof("Validator %s spawned...\n", address)
-
-//   return newValidator
-// }

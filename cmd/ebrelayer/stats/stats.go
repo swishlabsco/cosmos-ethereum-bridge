@@ -35,3 +35,4 @@ func (s *Stats) Print() {
 	secsPassed := time.Now().Sub(s.startedAt).Seconds()
 
 	log.Log.Infof("========== Stats: Total %v, Error: %v, %%Successful: %v, TPS: %v\n", total, s.numError, float64(s.numSuccessful)/float64(total), float64(s.numSuccessful)/secsPassed)
+}
