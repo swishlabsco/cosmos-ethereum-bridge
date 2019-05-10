@@ -1,21 +1,14 @@
 package txs
 
 import (
-  "fmt"
-  "strings"
   "time"
 
   "github.com/cosmos/cosmos-sdk/codec"
-  // "github.com/cosmos/cosmos-sdk/x/auth"
   "github.com/cosmos/cosmos-sdk/client/context"
-    tmcrypto "github.com/tendermint/tendermint/crypto"
-  "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/helpers"
+  tmcrypto "github.com/tendermint/tendermint/crypto"
   sdk "github.com/cosmos/cosmos-sdk/types"
-  // authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
-  // auth "github.com/cosmos/cosmos-sdk/x/auth/client/rest"
   "github.com/swishlabsco/cosmos-ethereum-bridge/x/oracle"
   "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/log"
-  // "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/stats"
   
   // "github.com/cosmos/cosmos-sdk/client"
   // "github.com/cosmos/cosmos-sdk/server"
@@ -23,21 +16,21 @@ import (
   // bankcmd "github.com/cosmos/cosmos-sdk/x/bank/client/cli"
   // bank "github.com/cosmos/cosmos-sdk/x/bank/client/rest"
   // authtxb "github.com/cosmos/cosmos-sdk/x/bank/client/txbuilder"
+  // authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
+  // auth "github.com/cosmos/cosmos-sdk/x/auth/client/rest"
 
 )
-
-// txBldr := authtxb.NewTxBuilderFromCLI()
 
 var (
   defaultBlockTime time.Duration = 1000
 )
 
 type relayCtx struct {
-	transactionHash string
+  transactionHash string
   ethereumSender  string
   cosmosReceiver  sdk.AccAddress
   amount          sdk.Coins
-  nonce						*big.Int
+  nonce           string
 }
 
 // -------------------------------------------------------------------------
@@ -45,36 +38,33 @@ type relayCtx struct {
 // creation and once available, relays the transaction to the oracle. 
 // -------------------------------------------------------------------------
 func sendRelayTx(
-		cdc 								*codec.Codec,
-    validatorPrefix 		string,
-    validatorPassword 	string,
-    ethereumSender 			string, 
-    cosmosRecipient 		string,
-    value 							*big.Int,
-    nonce 							*big.Int
-  ) {
+    cdc                 *codec.Codec,
+    validatorPrefix     string,
+    validatorPassword   string,
+    ethereumSender      string, 
+    cosmosRecipient     string,
+    value               string,
+    nonce               string){
 
   // Construct the relay context
-  relayCtx := relayCtx{ ethereumSender, cosmosReceiver, amount, nonce}
+  relayTxCtx := relayCtx{ ethereumSender, cosmosRecipient, value, nonce}
 
   // Create validator thread
-  accountName := info.GetName()
+  // accountName := info.GetName()
 
   var validator Validator
 
-  if strings.HasPrefix(accountName, validatorPrefix) {
-    validator, err = spawnValidator(relayCtx, cdc, validatorPassword, kb, info, &validator)
-  } else {
-    log.Log.Warningf("Error while spawning validator %v\n", err)
-    relayCtx.stats.AddError()
-    return;
-  }
-
-  // Prints current relay stats at regular intervals
-  //  go doEvery(1*time.Second, relayCtx.stats.Print)
+  // TODO: Instead of spawning validators, use given validator account information
+  // if strings.HasPrefix(accountName, validatorPrefix) {
+  //   validator, err = spawnValidator(relayCtx, cdc, validatorPassword, kb, info, &validator)
+  // } else {
+  //   log.Log.Warningf("Error while spawning validator %v\n", err)
+  //   relayCtx.stats.AddError()
+  //   return;
+  // }
 
   // Validator attempts to relay this transaction
-  go validators[i].relay(&relayCtx)
+  go validator.relay(&relayCtx)
 }
 
 
@@ -97,7 +87,6 @@ type Validator struct {
   cdc            *codec.Codec
   nextSequence   int64
   cliCtx         context.CLIContext
-  // txCtx          auth.stdTx
   priv           tmcrypto.PrivKey
   currentCoins   sdk.Coins
   sequenceCheck  int
@@ -120,20 +109,18 @@ func (vl *Validator) relay(relayCtx *relayCtx) {
   // If msg construction returned an error, return
   if !ok {
     log.Log.Warningf("Validator received error while making bridge claim: %v\n", err)
-    // vl.updateSequence()
     vl.queryFree <- true
     return
   }
 
   // Get the transaction context at validator's current sequence
-  vl.txCtx = vl.txCtx.WithSequence(vl.nextSequence)
+  // vl.txCtx = vl.txCtx.WithSequence(vl.nextSequence)
 
-   // Encode and Broadcast the transaction context with codec
-  // txCtx := EncodeTxRequestHandlerFn(vl.cdc, vl.cliCtx)
-  // handlerFunc = BroadcastTxRequest(vl.cdc, txCtx)
+  // Encode the transaction context with codec
+  txCtx := EncodeTxRequestHandlerFn(vl.cdc, vl.cliCtx)
 
   // Build transaction, sign with private key, and broadcast to network
-  _, err := helpers.PrivBuildSignAndBroadcastMsg(vl.cdc, vl.cliCtx, vl.txCtx, vl.priv, msg)
+  handlerFunc = BroadcastTxRequest(vl.cdc, txCtx)
 
   // Increment sequence/nonce
   vl.nextSequence = vl.nextSequence + 1
@@ -141,7 +128,6 @@ func (vl *Validator) relay(relayCtx *relayCtx) {
 
   if err != nil {
     log.Log.Warningf("Validator received error trying to relay: %v\n", err)
-
     vl.queryFree <- true
     return
   }
@@ -176,8 +162,8 @@ func (vl *Validator) makeBridgeClaim(relayCtx *relayCtx) (sdk.Msg, bool) {
   msg := oracle.NewMsgMakeBridgeClaim(
     nonce, ethereumSender, cosmosReceiver, validator, amount)
 
-  log.Log.Debugf("Validator %v: made claim of %v->%v an amount of %v with nonce %v\\n",
-    vl.index, ethereumSender, cosmosReceiver, amount, nonce)
+  log.Log.Debugf("Validator %v: made claim of %v->%v an amount of %v\\n",
+    vl.index, ethereumSender, cosmosReceiver, amount)
 
   return msg, true
 }
