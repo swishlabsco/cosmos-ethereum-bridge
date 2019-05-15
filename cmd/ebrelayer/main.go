@@ -1,17 +1,28 @@
 package main
 
 import (
-  "bytes"
+  // "bytes"
   "encoding/base64"
   "encoding/hex"
-  "encoding/json"
+  // "encoding/json"
   "fmt"
   "os"
   "strconv"
   "strings"
 
+  "github.com/cosmos/cosmos-sdk/client"
+  "github.com/cosmos/cosmos-sdk/client/keys"
+  "github.com/cosmos/cosmos-sdk/client/rpc"
+  "github.com/cosmos/cosmos-sdk/client/lcd"
+  amino "github.com/tendermint/go-amino"
+  "github.com/tendermint/tendermint/libs/cli"
+
+
   sdk "github.com/cosmos/cosmos-sdk/types"
-  "github.com/cosmos/cosmos-sdk/x/auth"
+  authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
+  auth "github.com/cosmos/cosmos-sdk/x/auth/client/rest"
+  bankcmd "github.com/cosmos/cosmos-sdk/x/bank/client/cli"
+  bank "github.com/cosmos/cosmos-sdk/x/bank/client/rest"
 
   "github.com/spf13/cobra"
   "github.com/tendermint/tendermint/crypto"
@@ -19,9 +30,23 @@ import (
 
   app "github.com/swishlabsco/cosmos-ethereum-bridge"
   relayer "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/relayer"
+  txs "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/txs"
+
+  ethbridgecmd "github.com/swishlabsco/cosmos-ethereum-bridge/x/ethbridge/client"
+  ethbridge "github.com/swishlabsco/cosmos-ethereum-bridge/x/ethbridge/client/rest"
+
 )
 
+const (
+  storeAcc       = "acc"
+  routeEthbridge = "ethbridge"
+)
+
+var defaultCLIHome = os.ExpandEnv("$HOME/.ebrelayer")
+
 func init() {
+
+  cdc := app.MakeCodec()
 
   config := sdk.GetConfig()
   config.SetBech32PrefixForAccount(sdk.Bech32PrefixAccAddr, sdk.Bech32PrefixAccPub)
@@ -29,28 +54,36 @@ func init() {
   config.SetBech32PrefixForConsensusNode(sdk.Bech32PrefixConsAddr, sdk.Bech32PrefixConsPub)
   config.Seal()
 
-  rootCmd.AddCommand(txCmd)
+  mc := []sdk.ModuleClients{
+    ethbridgecmd.NewModuleClient(routeEthbridge, cdc),
+  }
+
+  // Construct Root Command
+  rootCmd.AddCommand(
+    rpc.StatusCommand(),
+    initRelayerCmd(cdc, mc),
+    client.LineBreak,
+    lcd.ServeCommand(cdc, registerRoutes),
+    client.LineBreak,
+    keys.Commands(),
+    client.LineBreak,
+  )
+
   rootCmd.AddCommand(pubkeyCmd)
   rootCmd.AddCommand(addrCmd)
   rootCmd.AddCommand(rawBytesCmd)
+
+  executor := cli.PrepareMainCmd(rootCmd, "EBRELAYER", defaultCLIHome)
+  err := executor.Execute()
+  if err != nil {
+    panic(err)
+  }
 }
 
 var rootCmd = &cobra.Command{
   Use:          "ebrelayer",
   Short:        "ethereum bridge relayer",
   SilenceUsage: true,
-}
-
-var relayerCmd = &cobra.Command{
-  Use:   "relayer",
-  Short: "Start a light client daemon which listens for ethereum txs",
-  RunE:  runRelayerCmd,
-}
-
-var txCmd = &cobra.Command{
-  Use:   "tx",
-  Short: "Decode a bridge tx from hex or base64",
-  RunE:  runTxCmd,
 }
 
 var pubkeyCmd = &cobra.Command{
@@ -71,27 +104,61 @@ var rawBytesCmd = &cobra.Command{
   RunE:  runRawBytesCmd,
 }
 
-func runRelayerCmd(cmd *cobra.Command, args []string) error {
-  if len(args) != 6 {
-    return fmt.Errorf("Expected string arguments:",
-                      "chainId",
-                      "validatorPassword",
-                      "peggyAddress",
-                      "eventSignature",
-                      "validatorPrefix",
-                      "validatorPassword")
+func registerRoutes(rs *lcd.RestServer) {
+ rs.CliCtx = rs.CliCtx.WithAccountDecoder(rs.Cdc)
+ rpc.RegisterRoutes(rs.CliCtx, rs.Mux)
+ txs.RegisterRoutes(rs.CliCtx, rs.Mux, rs.Cdc)
+ auth.RegisterRoutes(rs.CliCtx, rs.Mux, rs.Cdc, storeAcc)
+ bank.RegisterRoutes(rs.CliCtx, rs.Mux, rs.Cdc, rs.KeyBase)
+ ethbridge.RegisterRoutes(rs.CliCtx, rs.Mux, rs.Cdc, routeEthbridge)
+}
+
+func initRelayerCmd(cdc *amino.Codec, mc []sdk.ModuleClients) *cobra.Command {
+  initRelayerCmd := &cobra.Command{
+    Use:     "init",
+    Short:   "initalize relayer service",
+    RunE:  RunRelayerCmd,
   }
 
+  initRelayerCmd.AddCommand(
+    //TODO: bankcmd/authcmd can likely be dropped
+    bankcmd.SendTxCmd(cdc),
+    client.LineBreak,
+    authcmd.GetSignCommand(cdc),
+
+    //TODO: add SendEventCommand here
+    txs.GetBroadcastCommand(cdc),
+    client.LineBreak,
+  )
+
+  for _, m := range mc {
+    initRelayerCmd.AddCommand(m.GetTxCmd())
+  }
+
+  return initRelayerCmd
+}
+
+// -------------------------------------------------------------------------
+// Initalizes the relayer service
+// -------------------------------------------------------------------------
+// Testing parameters:
+//    validator = sdk.AccAddress("cosmos1xdp5tvt7lxh8rf9xx07wy2xlagzhq24ha48xtq")
+//    chainId = "testing"
+//    ethereumProvider = "wss://ropsten.infura.io/ws"
+//    peggyContractAddress = "0xe56143b75f4eeac5fa80dc6ffd912d4a3ed21fdf"
+//    eventSignature = "LogLock(address,address,uint256)"
+
+func RunRelayerCmd(cmd *cobra.Command, args []string) error {
   // Parse chain's ID
-  chainID := args[0]
-  if chainID == "" {
+  chainId := args[0]
+  if chainId == "" {
     return fmt.Errorf("Must specify chain id")
   }
 
-  // Parse ethereum provider (infura)
+  // Parse ethereum provider
   ethereumProvider := args[1]
-  if ethereumProvider == "" {
-    return fmt.Errorf("Must specify ethreum network provider")
+  if ethereumProvider == "wss://ropsten.infura.io/ws" {
+    return fmt.Errorf("Only the ropsten ethereum network is currently supported")
   }
 
   // Parse peggy's deployed contract address
@@ -106,34 +173,84 @@ func runRelayerCmd(cmd *cobra.Command, args []string) error {
     return fmt.Errorf("Must specify event signature for subscription")
   }
 
-  // Parse validator prefix
-  validatorPrefix := args[4]
-  if validatorPrefix == "" {
-    return fmt.Errorf("Must specify validator's prefix")
+  // TODO: Authenticate validator by their credentials instead
+  //       of passing it as a parameter (see functions below)
+  // Parse the validator running the relayer service
+  validator := sdk.AccAddress(args[4])
+  if validator == nil {
+    return fmt.Errorf("Must have a validator for operations")
   }
 
-  // Parse validator password
-  validatorPassword := args[5]
-  if validatorPassword == "" {   //TODO: Sanitize input
-    return fmt.Errorf("Must specify validator's password")
+  err := relayer.InitRelayer(
+    // TODO: add codec back into this file
+    // cdc,
+    chainId,
+    ethereumProvider,
+    peggyContractAddress,
+    eventSignature,
+    validator)
+
+  if err != nil {
+    fmt.Printf("Relayer service closed.")
   }
 
-  // // Initialize the relayer
-  // err := relayer.InitRelayer([
-  //   chainID,
-  //   ethereumProvider,
-  //   peggyContractAddress,
-  //   eventSignature,
-  //   validatorPrefix,
-  //   validatorPassword
-  // ])
-
-  // if err != nil {
-  //   return fmt.Errorf(err)
-  // }
-
-  return fmt.Errorf("Relayer timed out")
+  return nil
 }
+
+
+// TODO: use these to authenticate validator before launching relayer
+//
+// // Files containing the validator's unique cerification key
+// func validateCertKeyFiles(certFile, keyFile string) error {
+//   if keyFile == "" {
+//     return errors.New("a key file is required")
+//   }
+//   if _, err := os.Stat(certFile); err != nil {
+//     return err
+//   }
+//   if _, err := os.Stat(keyFile); err != nil {
+//     return err
+//   }
+//   return nil
+// }
+
+// // Decode validator's certification key from file
+// func readCertKeyFile(certFile string) (string, error) {
+//   f, err := os.Open(certFile)
+//   if err != nil {
+//     return "", err
+//   }
+//   defer f.Close()
+//   data, err := ioutil.ReadAll(f)
+//   if err != nil {
+//     return "", err
+//   }
+//   block, _ := pem.Decode(data)
+//   if block == nil {
+//     return "", fmt.Errorf("couldn't find required data in %s", certFile)
+//   }
+//   return validatorCertKey(block.Bytes)
+// }
+
+
+// // Validator's unique certification key
+// func validatorCertKey(certBytes []byte) (string, error) {
+//   cert, err := x509.ParseCertificate(certBytes)
+//   if err != nil {
+//     return "", err
+//   }
+//   h := sha256.New()
+//   h.Write(cert.Raw)
+//   certKeyBytes := h.Sum(nil)
+//   var buf bytes.Buffer
+//   for i, b := range certKeyBytes {
+//     if i > 0 {
+//       fmt.Fprintf(&buf, ":")
+//     }
+//     fmt.Fprintf(&buf, "%02X", b)
+//   }
+//   return fmt.Sprintf("Hashed certification key:%s", buf.String()), nil
+// }
 
 func runRawBytesCmd(cmd *cobra.Command, args []string) error {
   if len(args) != 1 {
@@ -266,50 +383,6 @@ func runAddrCmd(cmd *cobra.Command, args []string) error {
   fmt.Printf("Address (hex): %X\n", addr)
   fmt.Printf("Bech32 Acc: %s\n", accAddr)
   fmt.Printf("Bech32 Val: %s\n", valAddr)
-  return nil
-}
-
-func runTxCmd(cmd *cobra.Command, args []string) error {
-  if len(args) != 1 {
-    return fmt.Errorf("Expected single arg")
-  }
-
-  txString := args[0]
-
-  // try hex, then base64
-  txBytes, err := hex.DecodeString(txString)
-  if err != nil {
-    var err2 error
-    txBytes, err2 = base64.StdEncoding.DecodeString(txString)
-    if err2 != nil {
-      return fmt.Errorf(`Expected hex or base64. Got errors:
-      hex: %v,
-      base64: %v
-      `, err, err2)
-    }
-  }
-
-  var tx = auth.StdTx{}
-  cdc := app.MakeCodec()
-
-  // TODO: Update so it works with 26 bytes, not 31.
-  err = cdc.UnmarshalBinaryLengthPrefixed(txBytes, &tx)
-  if err != nil {
-    return err
-  }
-
-  bz, err := cdc.MarshalJSON(tx)
-  if err != nil {
-    return err
-  }
-
-  buf := bytes.NewBuffer([]byte{})
-  err = json.Indent(buf, bz, "", "  ")
-  if err != nil {
-    return err
-  }
-
-  fmt.Println(buf.String())
   return nil
 }
 
