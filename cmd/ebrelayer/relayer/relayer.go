@@ -46,6 +46,7 @@ func InitRelayer(
     provider string,
     peggyContractAddress string,
     eventSignature string,
+    // TODO: Authenticate certification files (see below)
     validator sdk.AccAddress) error {
 
     // Console log for testing purposes...
