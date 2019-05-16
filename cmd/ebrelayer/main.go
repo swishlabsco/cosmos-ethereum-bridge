@@ -30,7 +30,7 @@ import (
 
   app "github.com/swishlabsco/cosmos-ethereum-bridge"
   relayer "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/relayer"
-  txs "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/txs"
+  // txs "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/txs"
 
   ethbridgecmd "github.com/swishlabsco/cosmos-ethereum-bridge/x/ethbridge/client"
   ethbridge "github.com/swishlabsco/cosmos-ethereum-bridge/x/ethbridge/client/rest"
@@ -121,12 +121,8 @@ func initRelayerCmd(cdc *amino.Codec, mc []sdk.ModuleClients) *cobra.Command {
   }
 
   initRelayerCmd.AddCommand(
-    //TODO: bankcmd/authcmd can likely be dropped
-    bankcmd.SendTxCmd(cdc),
-    client.LineBreak,
-    authcmd.GetSignCommand(cdc),
-
-    //TODO: add SendEventCommand here
+    //TODO: add RelayCommand here
+    txs.GetBroadcastCommand(cdc),
     txs.GetBroadcastCommand(cdc),
     client.LineBreak,
   )
@@ -142,13 +138,17 @@ func initRelayerCmd(cdc *amino.Codec, mc []sdk.ModuleClients) *cobra.Command {
 // Initalizes the relayer service
 // -------------------------------------------------------------------------
 // Testing parameters:
-//    validator = sdk.AccAddress("cosmos1xdp5tvt7lxh8rf9xx07wy2xlagzhq24ha48xtq")
-//    chainId = "testing"
-//    ethereumProvider = "wss://ropsten.infura.io/ws"
-//    peggyContractAddress = "0xe56143b75f4eeac5fa80dc6ffd912d4a3ed21fdf"
-//    eventSignature = "LogLock(address,address,uint256)"
+//    1: chainId = "testing"
+//    2: ethereumProvider = "wss://ropsten.infura.io/ws"
+//    3: peggyContractAddress = "0xe56143b75f4eeac5fa80dc6ffd912d4a3ed21fdf"
+//    4: eventSignature = "LogLock(address,address,uint256)"
+//    5: validator = sdk.AccAddress("cosmos1xdp5tvt7lxh8rf9xx07wy2xlagzhq24ha48xtq")
 
 func RunRelayerCmd(cmd *cobra.Command, args []string) error {
+  if(len(args) != 5) {
+    return fmt.Errorf("Expected 5 arguments...")
+  }
+
   // Parse chain's ID
   chainId := args[0]
   if chainId == "" {
@@ -157,7 +157,7 @@ func RunRelayerCmd(cmd *cobra.Command, args []string) error {
 
   // Parse ethereum provider
   ethereumProvider := args[1]
-  if ethereumProvider == "wss://ropsten.infura.io/ws" {
+  if ethereumProvider == "" {
     return fmt.Errorf("Only the ropsten ethereum network is currently supported")
   }
 
@@ -173,8 +173,7 @@ func RunRelayerCmd(cmd *cobra.Command, args []string) error {
     return fmt.Errorf("Must specify event signature for subscription")
   }
 
-  // TODO: Authenticate validator by their credentials instead
-  //       of passing it as a parameter (see functions below)
+  // TODO: Authenticate validator by their credentials
   // Parse the validator running the relayer service
   validator := sdk.AccAddress(args[4])
   if validator == nil {
@@ -182,8 +181,7 @@ func RunRelayerCmd(cmd *cobra.Command, args []string) error {
   }
 
   err := relayer.InitRelayer(
-    // TODO: add codec back into this file
-    // cdc,
+    cdc,
     chainId,
     ethereumProvider,
     peggyContractAddress,
@@ -196,61 +194,6 @@ func RunRelayerCmd(cmd *cobra.Command, args []string) error {
 
   return nil
 }
-
-
-// TODO: use these to authenticate validator before launching relayer
-//
-// // Files containing the validator's unique cerification key
-// func validateCertKeyFiles(certFile, keyFile string) error {
-//   if keyFile == "" {
-//     return errors.New("a key file is required")
-//   }
-//   if _, err := os.Stat(certFile); err != nil {
-//     return err
-//   }
-//   if _, err := os.Stat(keyFile); err != nil {
-//     return err
-//   }
-//   return nil
-// }
-
-// // Decode validator's certification key from file
-// func readCertKeyFile(certFile string) (string, error) {
-//   f, err := os.Open(certFile)
-//   if err != nil {
-//     return "", err
-//   }
-//   defer f.Close()
-//   data, err := ioutil.ReadAll(f)
-//   if err != nil {
-//     return "", err
-//   }
-//   block, _ := pem.Decode(data)
-//   if block == nil {
-//     return "", fmt.Errorf("couldn't find required data in %s", certFile)
-//   }
-//   return validatorCertKey(block.Bytes)
-// }
-
-
-// // Validator's unique certification key
-// func validatorCertKey(certBytes []byte) (string, error) {
-//   cert, err := x509.ParseCertificate(certBytes)
-//   if err != nil {
-//     return "", err
-//   }
-//   h := sha256.New()
-//   h.Write(cert.Raw)
-//   certKeyBytes := h.Sum(nil)
-//   var buf bytes.Buffer
-//   for i, b := range certKeyBytes {
-//     if i > 0 {
-//       fmt.Fprintf(&buf, ":")
-//     }
-//     fmt.Fprintf(&buf, "%02X", b)
-//   }
-//   return fmt.Sprintf("Hashed certification key:%s", buf.String()), nil
-// }
 
 func runRawBytesCmd(cmd *cobra.Command, args []string) error {
   if len(args) != 1 {
@@ -385,6 +328,60 @@ func runAddrCmd(cmd *cobra.Command, args []string) error {
   fmt.Printf("Bech32 Val: %s\n", valAddr)
   return nil
 }
+
+// TODO: use these to authenticate validator before launching relayer
+
+// Files containing the validator's unique cerification key
+func validateCertKeyFiles(certFile, keyFile string) error {
+  if keyFile == "" {
+    return errors.New("a key file is required")
+  }
+  if _, err := os.Stat(certFile); err != nil {
+    return err
+  }
+  if _, err := os.Stat(keyFile); err != nil {
+    return err
+  }
+  return nil
+}
+
+// Decode validator's certification key from file
+// func readCertKeyFile(certFile string) (string, error) {
+//   f, err := os.Open(certFile)
+//   if err != nil {
+//     return "", err
+//   }
+//   defer f.Close()
+//   data, err := ioutil.ReadAll(f)
+//   if err != nil {
+//     return "", err
+//   }
+//   block, _ := pem.Decode(data)
+//   if block == nil {
+//     return "", fmt.Errorf("couldn't find required data in %s", certFile)
+//   }
+//   return validatorCertKey(block.Bytes)
+// }
+
+
+// // Validator's unique certification key
+// func validatorCertKey(certBytes []byte) (string, error) {
+//   cert, err := x509.ParseCertificate(certBytes)
+//   if err != nil {
+//     return "", err
+//   }
+//   h := sha256.New()
+//   h.Write(cert.Raw)
+//   certKeyBytes := h.Sum(nil)
+//   var buf bytes.Buffer
+//   for i, b := range certKeyBytes {
+//     if i > 0 {
+//       fmt.Fprintf(&buf, ":")
+//     }
+//     fmt.Fprintf(&buf, "%02X", b)
+//   }
+//   return fmt.Sprintf("Hashed certification key:%s", buf.String()), nil
+// }
 
 func main() {
   err := rootCmd.Execute()

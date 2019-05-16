@@ -21,7 +21,7 @@ type EthEvent struct {
     Amount         sdk.Coins      `json:"amount"`
 }
 
-func relayEvent(
+func RelayEvent(
   cdc *codec.Codec,
   cosmosRecipient sdk.AccAddress,
   validator sdk.AccAddress,
@@ -46,25 +46,35 @@ func relayEvent(
     return err
   }
 
-  ethereumEvent := EthEvent(nonce, ethereumAddress, cosmosRecipient, validator, amount)
-  msg := types.NewMsgMakeEthBridgeClaim(ethereumEvent)
+  // const bech32Validator, err2 = sdk.AccAddressFromBech32(activeValidator)
+  // if err2 != nil {
+  //     fmt.Errorf("%s", err2)
+  // }
+
+  //Get cosmos recipient
+  // const cosmosRecipient, err1 = sdk.AccAddressFromBech32(lockEvent.CosmosRecipient.Hex())
+  // if err1 != nil {
+  //     fmt.Errorf("%s", err1)
+  // }
+
+  // TODO: Add token address to lockEvent struct for token parsing,
+  //       if field == '0x00000000....' then use string 'ethereum'
+  //       for decoding
   
-  err = msg.ValidateBasic()
-  if err != nil {
-    return err
+  //Get coin amount and correct for wei 10**18
+  // amount, err3 = sdk.ParseCoins(strings,Join(strconv.Itoa(lockEvent.Value/(Pow(10.0, 18))), "ethereum")
+  // if err3 != nil {
+  //     fmt.Errorf("%s", err3)
+  // }
+
+  ethBridgeClaim := types.NewEthBridgeClaim(nonce, ethereumAddress, cosmosRecipient, validator, amount)
+  msg := types.NewMsgMakeEthBridgeClaim(ethBridgeClaim)
+  
+  err1 := msg.ValidateBasic()
+  if err1 != nil {
+    return err1
   }
 
-  //TODO: build and sign the transaction first
-  //
-  //  msg := utils.buildUnsignedStdTx(txBldr, cliCtx, []sdk.Msg{msg})
-  //  txBytes := utils.SignStdTxWithSignerAddress(msg)
-  //
-  //TODO: broadcast to a Tendermint node
-  //
-  //  res, err := cliCtx.BroadcastTx(txBytes)
-  //  if err != nil {
-  //      return err
-  //  }
-  //  return cliCtx.PrintOutput(res)
+  return utils.CompleteAndBroadcastTxCLI(txBldr, cliCtx, []sdk.Msg{msg})
 
 }
