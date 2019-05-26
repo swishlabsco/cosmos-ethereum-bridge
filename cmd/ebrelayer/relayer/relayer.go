@@ -6,6 +6,7 @@ import (
     "encoding/hex"
     "fmt"
     "math/big"
+    "time"
     
     sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -13,20 +14,19 @@ import (
     "github.com/ethereum/go-ethereum"
     "github.com/ethereum/go-ethereum/crypto"
     "github.com/ethereum/go-ethereum/core/types"
-    "github.com/ethereum/go-ethereum/ethclient"
 
     // "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/txs"
     "github.com/cosmos/cosmos-sdk/codec"
 
 )
 
-type LogLock struct {
-    TransactionHash        string
-    EthereumSender         common.Address
-    CosmosRecipient        common.Address
-    Value                  *big.Int
-    Nonce                  *big.Int
-}
+// type LogLock struct {
+//     TransactionHash        string
+//     EthereumSender         common.Address
+//     CosmosRecipient        common.Address
+//     Value                  *big.Int
+//     Nonce                  *big.Int
+// }
 
 // -------------------------------------------------------------------------
 // Starts an event listener on a specific network, contract, and event
@@ -55,7 +55,7 @@ func InitRelayer(
     fmt.Printf("validator: %s\n\n", validator)
 
    // Start client with infura ropsten provider
-    client, err := ethclient.Dial(provider)
+    client, err := SetupWebsocketEthClient(provider);
     if err != nil {
         log.Fatal(err)
     }
@@ -100,20 +100,16 @@ func InitRelayer(
             // Check if the event is a 'LogLock' event
             if vLog.Topics[0].Hex() == logLockEvent.Hex() {
 
-                var lockEvent LogLock
+                currentTime := fmt.Println(time.Now().Format(time.RFC850))
 
-                // Populate LogLock with event information
-                lockEvent.TransactionHash = vLog.TxHash.String()
-                lockEvent.EthereumSender = common.HexToAddress(vLog.Topics[1].Hex())
-                lockEvent.CosmosRecipient = common.HexToAddress(vLog.Topics[2].Hex())
-                lockEvent.Value = vLog.Topics[3].Big()
-                lockEvent.Nonce = vLog.Topics[4].Big()
-
-                fmt.Printf("Event Message parameters:\n Cosmos Recipient: %s,\n Validator: %s,\n Nonce: %d,\n Ethereum Address: %s,\n Amount: %s\n",
-                            lockEvent.CosmosRecipient, validator, lockEvent.Nonce, lockEvent.EthereumSender, lockEvent.Value)
-
-                // txs.RelayEvent(cdc, "cosmos1xdpfh8vt7lxh8rf9xx0pjzy2xlagzhq24ha48xtq", validator, 0, "0xe88843b75f4eeaj5fa80dc6ffd912d4a3ed21lz4", 1001)
+                event, eventErr := NewEventFromContractEvent("LockEvent", "Peggy", contractAddress, vLog, currentTime, 0)
+                if eventErr != nil {
+                    log.Fatal(err)
+                }
                 
+                // TODO: pass this event to txs/relayer
+                // TODO: update txs/relayer to accept type 'event'
+
             }
         }
     }
