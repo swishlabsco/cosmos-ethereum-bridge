@@ -20,14 +20,6 @@ import (
 
 )
 
-// type LogLock struct {
-//     TransactionHash        string
-//     EthereumSender         common.Address
-//     CosmosRecipient        common.Address
-//     Value                  *big.Int
-//     Nonce                  *big.Int
-// }
-
 // -------------------------------------------------------------------------
 // Starts an event listener on a specific network, contract, and event
 // -------------------------------------------------------------------------
@@ -106,7 +98,7 @@ func InitRelayer(
                 if eventErr != nil {
                     log.Fatal(err)
                 }
-                
+
                 // TODO: pass this event to txs/relayer
                 // TODO: update txs/relayer to accept type 'event'
 

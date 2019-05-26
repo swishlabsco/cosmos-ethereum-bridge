@@ -101,7 +101,7 @@ package contract
 //   return types
 // }
 
-// // ContractType is an enum for the Civil contract type
+// // ContractType is an enum contract type
 // type ContractType int
 
 // // CTypes is a struct that contains a map of readable name to a
