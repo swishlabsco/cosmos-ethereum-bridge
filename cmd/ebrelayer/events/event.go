@@ -1,4 +1,4 @@
-package relayer
+package events
 
 import (
   "fmt"
@@ -19,19 +19,6 @@ import (
   "github.com/fatih/structs"
 )
 
-const (  
-  // Watcher is the enum value for a retrieval method of type "validator"
-  Watcher
-
-  // Filterer is the enum value for a retrieval method of type "filterer"
-  // NOTE: This type of retrieval is NOT supported in the cosmos-ethereum-bridge
-  // TODO: remove filtering entirely
-  Filterer RetrievalMethod = iota
-)
-
-// RetrievalMethod is the enum for the type of retrieval method
-type RetrievalMethod int
-
 // ReturnEventFromABI returns abi.Event struct from the ABI
 func ReturnEventFromABI(_abi abi.ABI, eventType string) (abi.Event, error) {
   event, ok := _abi.Events[eventType]
@@ -46,7 +33,7 @@ func ReturnEventFromABI(_abi abi.ABI, eventType string) (abi.Event, error) {
 
 // NewEventFromContractEvent creates a new event after converting eventData to interface{}
 func NewEventFromContractEvent(eventType string, contractName string, contractAddress common.Address,
-  eventData interface{}, timestamp int64, retrievalMethod RetrievalMethod) (*Event, error) {
+  eventData interface{}, timestamp int64) (*Event, error) {
   event := &Event{}
 
   payload := NewEventPayload(eventData)
@@ -60,13 +47,13 @@ func NewEventFromContractEvent(eventType string, contractName string, contractAd
   if err != nil {
     return event, err
   }
-  event, err = NewEvent(eventType, contractName, contractAddress, timestamp, retrievalMethod, eventPayload, logPayload)
+  event, err = NewEvent(eventType, contractName, contractAddress, timestamp, eventPayload, logPayload)
   return event, err
 }
 
 // NewEvent is a convenience function to create a new Event
 func NewEvent(eventType string, contractName string, contractAddress common.Address, timestamp int64,
-  retrievalMethod RetrievalMethod, eventPayload map[string]interface{}, logPayload *types.Log) (*Event, error) {
+  eventPayload map[string]interface{}, logPayload *types.Log) (*Event, error) {
   event := &Event{}
   event.eventType = eventType
   event.contractName = contractName
@@ -74,7 +61,6 @@ func NewEvent(eventType string, contractName string, contractAddress common.Addr
   event.eventPayload = eventPayload
   event.logPayload = logPayload
   event.timestamp = timestamp
-  event.retrievalMethod = retrievalMethod
   event.eventHash = event.hashEvent()
   return event, nil
 }
@@ -97,9 +83,6 @@ type Event struct {
 
   // time from epoch of the block of the transaction for this event (in seconds)
   timestamp int64
-
-  // retrievalMethod is the way this event was retrieved
-  retrievalMethod RetrievalMethod
 
   // event payload that doesn't include the "Raw" field
   eventPayload map[string]interface{}
@@ -232,11 +215,6 @@ func (e *Event) Timestamp() int64 {
 // SetTimestamp returns the timestamp for the Event
 func (e *Event) SetTimestamp(ts int64) {
   e.timestamp = ts
-}
-
-// RetrievalMethod returns the method that was used to retrieve this event
-func (e *Event) RetrievalMethod() RetrievalMethod {
-  return e.retrievalMethod
 }
 
 // EventPayload returns the event payload for the Event

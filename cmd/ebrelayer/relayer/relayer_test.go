@@ -1,162 +1,219 @@
 package relayer
-
-// TODO: These tests will be used on the relayer service
+// -------------------------------------------------------
+// TODO: Object orient relayer so that these tests will work
+// -------------------------------------------------------
 
 // import (
-// 	"encoding/base64"
-// 	"encoding/hex"
-// 	"fmt"
-// 	"net/http"
-// 	"os"
-// 	"regexp"
-// 	"strings"
+// 	"context"
+// 	"errors"
+// 	"math/big"
+// 	"sync"
 // 	"testing"
 // 	"time"
 
-// 	"github.com/stretchr/testify/require"
+// 	"github.com/ethereum/go-ethereum"
+// 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+// 	"github.com/ethereum/go-ethereum/common"
+// 	"github.com/ethereum/go-ethereum/core/types"
 
-// 	"github.com/cosmos/cosmos-sdk/client"
-// 	"github.com/cosmos/cosmos-sdk/client/keys"
-// 	clienttx "github.com/cosmos/cosmos-sdk/client/tx"
-// 	clientrest "github.com/cosmos/cosmos-sdk/client/rest"
-// 	sdk "github.com/cosmos/cosmos-sdk/types"
-// 	"github.com/cosmos/cosmos-sdk/types/rest"
-// 	"github.com/cosmos/cosmos-sdk/version"
-// 	"github.com/cosmos/cosmos-sdk/x/auth"
-// 	"github.com/cosmos/cosmos-sdk/x/bank"
-// 	"github.com/cosmos/cosmos-sdk/codec"
-
-// 	app "github.com/swishlabsco/cosmos-ethereum-bridge"
-// 	"github.com/swishlabsco/cosmos-ethereum-bridge/x/ethbridge"
 // )
 
-// const (
-// 	name1 = "validtor1"
-// 	name2 = "validator2"
-// 	name3 = "validator99"
-// 	ethereumAddress = "0x7B95B6EC7EbD73572298cEf32Bb54FA408207359"
-// 	cosmosRecipient = "cosmos1gn8409qq9hnrxde37kuxwx5hrxpfpv8426szuv"
-// 	testValidator = "cosmos1xdp5tvt7lxh8rf9xx07wy2xlagzhq24ha48xtq"
-// 	amount = 1500
-// 	nonce = 5
-// 	pw    = app.DefaultKeyPass
-// 	pw2 = "12345678"
-// )
-
-// var fees = sdk.Coins{sdk.NewInt64Coin(sdk.DefaultBondDenom, 5)}
-
-// func init() {
-// 	mintkey.BcryptSecurityParameter = 1
+// type testTrigger struct {
+// 	shouldRun bool
+// 	runErr    error
 // }
 
-// // Test that the relayer starts correctly
-// func TestConnectionStatus(t *testing.T) {
-// 	cleanup, _, _, port := InitTestRelayer(t, 1, []sdk.AccAddress{}, true)
-// 	defer cleanup()
-// 	getNodeInfo(t, port)
-// 	getSyncStatus(t, port, false)
+// func (t *testTrigger) Description() string {
+// 	return "testtrigger"
 // }
 
-// // Check that we can query blocks
-// func TestBlock(t *testing.T) {
-// 	cleanup, _, _, port := InitTestRelayer(t, 1, []sdk.AccAddress{}, true)
-// 	defer cleanup()
-// 	getBlock(t, port, -100, false)
-// 	getBlock(t, port, 100000000, true)
+// type lastBlockData struct {
+// 	eventType       string
+// 	contractAddress string
+// 	lastBlockNumber uint64
 // }
 
-// func TestValidators(t *testing.T) {
-// 	cleanup, _, _, port := InitTestRelayer(t, 1, []sdk.AccAddress{}, true)
-// 	defer cleanup()
-// 	resultVals := getValidatorSets(t, port, -1, false)
-
-// 	// Check that the validator's address and public key is in the result set
-// 	require.Contains(t, resultVals.Validators[0].Address.String(), "cosmosvalcons")
-// 	require.Contains(t, resultVals.Validators[0].PubKey, "cosmosvalconspub")
-
-// 	getValidatorSets(t, port, 5, false)
-// 	getValidatorSets(t, port, 10000000, true)
+// type testSubscription struct {
 // }
 
-// // Test encoding of transactions from txs/encode
-// func TestEncodeTx(t *testing.T) {
-// 	//Start the server
-// 	kb, err := keys.NewKeyBaseFromDir(InitClientHome(t, ""))
-// 	require.NoError(t, err)
-// 	addr, seed := CreateAddr(t, name1, pw, kb)
-// 	cleanup, _, _, port := InitTestRelayer(t, 1, []sdk.AccAddress{addr}, true)
-// 	defer cleanup()
-
-// 	// Test transfer
-// 	res, body, _ := doTransferWithGas(t, port, seed, name1, memo, "", addr, "2", 1, false, false, fees)
-// 	var tx auth.StdTx
-// 	cdc.UnmarshalJSON([]byte(body), &tx)
-
-// 	req := clienttx.EncodeReq{Tx: tx}
-// 	encodedJSON, _ := cdc.MarshalJSON(req)
-// 	res, body = Request(t, port, "POST", "/txs/encode", encodedJSON)
-
-// 	// Make response is valid and able to be decoded
-// 	require.Equal(t, http.StatusOK, res.StatusCode, body)
-// 	encodeResp := struct {
-// 		Tx string `json:"tx"`
-// 	}{}
-
-// 	require.Nil(t, cdc.UnmarshalJSON([]byte(body), &encodeResp))
-
-// 	// Verifiy that the base64 can be decoded
-// 	decodedBytes, err := base64.StdEncoding.DecodeString(encodeResp.Tx)
-// 	require.Nil(t, err)
-
-// 	// Check that the transaction decodes
-// 	var decodedTx auth.StdTx
-// 	require.Nil(t, cdc.UnmarshalBinaryLengthPrefixed(decodedBytes, &decodedTx))
-// 	require.Equal(t, memo, decodedTx.Memo)
+// func (t *testSubscription) Unsubscribe() {
 // }
 
-// // Test make bridge claim
-// func TestMakeBridgeClaim(t *testing.T) {
-// 	// Initalize the test server
-// 	kb, err := keys.NewKeyBaseFromDir(InitClientHome(t, ""))
-// 	require.NoError(t, err)
-// 	addr, seed := CreateAddr(t, name1, pw, kb)
-// 	cleanup, _, _, port := InitTestServer(t, 1, []sdk.AccAddress{addr}, true)
-// 	defer cleanup()
+// func (t *testSubscription) Err() <-chan error {
+// 	return make(chan error)
+// }
 
-// 	// Get an account and it's initial balance
-// 	acc := getAccount(t, port, addr)
-// 	initialBalance := acc.GetCoins()
+// type testChainReader struct {
+// }
 
-// 	// Create MakeBridgeClaim TX
-// 	ethBridgeClaim := types.NewEthBridgeClaim(nonce, ethereumSender, cosmosRecipient, validator, amount)
-// 	msg := types.NewMsgMakeEthBridgeClaim(ethBridgeClaim)
-// 	err = msg.ValidateBasic()
+// func (t *testChainReader) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+// 	return &types.Block{}, nil
+// }
+// func (t *testChainReader) BlockByNumber(ctx context.Context, number *big.Int) (*types.Block, error) {
+// 	return &types.Block{}, nil
+// }
+// func (t *testChainReader) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
+// 	return &types.Header{
+// 		Time: big.NewInt(88888888),
+// 	}, nil
+// }
+// func (t *testChainReader) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
+// 	return &types.Header{
+// 		Time: big.NewInt(88888888),
+// 	}, nil
+// }
+// func (t *testChainReader) TransactionCount(ctx context.Context, blockHash common.Hash) (uint, error) {
+// 	return uint(0), nil
+// }
+// func (t *testChainReader) TransactionInBlock(ctx context.Context, blockHash common.Hash, index uint) (*types.Transaction, error) {
+// 	return &types.Transaction{}, nil
+// }
+// func (t *testChainReader) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
+// 	return &testSubscription{}, nil
+// }
+
+// func (n *testPersister) LastBlockNumber(eventType string, contractAddress common.Address) uint64 {
+// 	return n.lastBlock.lastBlockNumber
+// }
+
+// func (n *testPersister) LastBlockHash(eventType string, contractAddress common.Address) common.Hash {
+// 	return common.Hash{}
+// }
+
+// func (n *testPersister) UpdateLastBlockData(events []*model.Event) error {
+// 	if len(events) == 0 {
+// 		return n.updateLastBlockError
+// 	}
+// 	event := events[0]
+// 	n.lastBlock.eventType = event.EventType()
+// 	n.lastBlock.contractAddress = event.ContractAddress().Hex()
+// 	rawLog := event.LogPayload()
+// 	n.lastBlock.lastBlockNumber = rawLog.BlockNumber
+// 	return n.updateLastBlockError
+// }
+
+
+// func (t *testErrorWatcher) ContractAddress() common.Address {
+// 	return common.HexToAddress("")
+// }
+
+// func relayerStart(t *testing.T, errChan chan error) {
+// 	err := initRelayer()
 // 	if err != nil {
-// 		return err
+// 		t.Errorf("Error initializing relayer: err: %v", err)
+// 		errChan <- err
+// 	}
+// }
+
+// func setupTestRelayer(contracts contractData) relayerMock {
+
+// 	testRelayer := relayer.Relayer(
+// 		&relayer.Config{
+// 			Chain:              &testChainReader{},
+// 			WsClient:           contracts.Client,
+// 			Triggers:           triggers,
+// 			StartBlock:         0,
+// 		},
+// 	)
+// 	return testRelayer
+// }
+
+// func TestNewRelayer(t *testing.T) {
+// 	contracts, err := cutils.SetupAllTestContracts()
+// 	if err != nil {
+// 		t.Fatalf("Unable to setup the contracts: %v", err)
+// 	}
+// 	collector := setupTestRelayer(contracts)
+
+// 	errChan := make(chan error)
+
+// 	select {
+// 	case err := <-errChan:
+// 		t.Errorf("Should not have received error on start relaying: err: %v", err)
+// 	case <-time.After(5 * time.Second):
+// 	}
+// }
+
+// func TestEventRelay(t *testing.T) {
+// 	contracts, err := cutils.SetupAllTestContracts()
+// 	if err != nil {
+// 		t.Fatalf("Unable to setup the contracts: %v", err)
+// 	}
+// 	collector, persister := setupTestCollectorTestPersister(contracts)
+
+// 	errChan := make(chan error)
+// 	go collectionStart(collector, t, errChan)
+
+// 	<-collector.StartChan()
+// 	_, err = contracts.PeggyContract.Apply(contracts.Auth, contracts.PeggyContract, big.NewInt(400), "")
+// 	if err != nil {
+// 		t.Fatalf("Application failed: err: %v", err)
 // 	}
 
-// 	tests.WaitForHeight(resultTx.Height+1, port)
+// 	contracts.Client.Commit()
 
-// 	// Check if tx was committed
-// 	require.Equal(t, uint32(0), := .Code)
+// 	_, err = contracts.PeggyContract.Withdraw(contracts.Auth, contracts.PeggyContract, big.NewInt(50))
+// 	if err != nil {
+// 		t.Fatalf("Withdrawal failed: err: %v", err)
+// 	}
 
-// 	// Query the commited TX
-// 	txs = getTransactions(t, port, fmt.Sprintf("action=make%%20claim&validator=%s", addr.String()))
-// 	require.Equal(t, emptyTxs, txs)
+// 	contracts.Client.Commit()
 
-// 	var claimID uint64
-// 	cdc.MustUnmarshalBinaryLengthPrefixed(:= .Data, &claimID)
+// 	_, err = contracts.PeggyContract.Send(contracts.Auth, contracts.PeggyContract, big.NewInt(50))
+// 	if err != nil {
+// 		t.Fatalf("Deposit failed: err: %v", err)
+// 	}
 
-// 	// Check that the claim was created with the correct values
-// 	claim := getClaim(t, port, claimID)
-// 	require.Equal(t, ethereumSender, claim.getEthereumSender())
-// 	require.Equal(t, cosmosRecipient, claim.getCosmosRecipient())
-// 	require.Equal(t, amount, claim.getAmount())
-// 	require.Equal(t, nonce, claim.getNonce())
-// 	require.Equal(t, testValidator, claim.getValidator())
+// 	contracts.Client.Commit()
 
-// 	// Confirm that this is the account which submitted the claim
-// 	validator := getValidator(t, port, claimID)
-// 	require.Equal(t, addr.String(), claim.Validator) 
-// 	require.Equal(t, claimId, claim.claimID)
+// 	// Sleep for a bit to make sure all the events gets handled and stored
+// 	time.Sleep(4 * time.Second)
+
+// 	events, _ := persister.RetrieveEvents(&model.RetrieveEventsCriteria{
+// 		Offset:  0,
+// 		Count:   10,
+// 		Reverse: false,
+// 	})
+
+// 	if len(events) == 0 {
+// 		t.Error("Should have seen some events in the persister")
+// 	}
+
+// 	if len(events) != 6 {
+// 		t.Errorf("Should have seen 6 events in the persister, saw %v instead", len(events))
+// 		for _, event := range events {
+// 			t.Logf("event = %v", event.EventType())
+// 		}
+// 	}
+
+// 	err = collector.StopCollection(true)
+// 	if err != nil {
+// 		t.Errorf("Should not have returned an error when stopping collection: err: %v", err)
+// 	}
+// }
+
+// func TestCheckRetrievedEvents(t *testing.T) {
+// 	contracts, err := cutils.SetupAllTestContracts()
+// 	if err != nil {
+// 		t.Fatalf("Unable to setup the contracts: %v", err)
+// 	}
+// 	collector, _ := setupTestCollectorTestPersisterBadUpdateBlockData(contracts)
+
+// 	testAddress := "0xdfe273082089bb7f70ee36eebcde64832fe97e55"
+// 	testApplicationWhitelisted := &contract.PeggyContract{
+// 		ListingAddress: common.HexToAddress(testAddress),
+// 		Raw: types.Log{
+// 			Address:     common.HexToAddress(testAddress),
+// 			Topics:      []common.Hash{},
+// 			Data:        []byte{},
+// 			BlockNumber: 8888888,
+// 			Index:       1,
+// 		},
+// 	}
+
+// 	_, err = relayer.CheckRetrievedEvents(pastEvents)
+// 	if err != nil {
+// 		t.Errorf("Error checking retrieved events: %v", err)
+// 	}
+
 // }

@@ -15,20 +15,23 @@ import (
     "github.com/ethereum/go-ethereum/crypto"
     "github.com/ethereum/go-ethereum/core/types"
 
-    // "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/txs"
-    "github.com/cosmos/cosmos-sdk/codec"
+    "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/txs"
+    "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/events"
 
+    "github.com/cosmos/cosmos-sdk/codec"
 )
+
+type WitnessedLogLock struct {
+    EthereumSender string         `json:"ethereum_sender"`
+    CosmosRecipient sdk.AccAddress `json:"cosmos_receiver"`
+    Validator      sdk.AccAddress `json:"validator"`
+    Amount         sdk.Coins      `json:"amount"`
+    Nonce          int            `json:"nonce"`
+}
 
 // -------------------------------------------------------------------------
 // Starts an event listener on a specific network, contract, and event
 // -------------------------------------------------------------------------
-// Testing parameters:
-//    validator = sdk.AccAddress("cosmos1xdp5tvt7lxh8rf9xx07wy2xlagzhq24ha48xtq")
-//    chainId = "testing"
-//    ethereumProvider = "wss://ropsten.infura.io/ws"
-//    peggyContractAddress = "0xe56143b75f4eeac5fa80dc6ffd912d4a3ed21fdf"
-//    eventSignature = "LogLock(address,address,uint256)"
 
 func InitRelayer(
     cdc *codec.Codec,
@@ -84,24 +87,45 @@ func InitRelayer(
 
     for {
         select {
+        // Handle any errors
         case err := <-sub.Err():
             log.Fatal(err)
+        // vLog is raw event data
         case vLog := <-logs:
             fmt.Println("\nBlock Number:", vLog.BlockNumber)
 
             // Check if the event is a 'LogLock' event
             if vLog.Topics[0].Hex() == logLockEvent.Hex() {
 
+                // Current time is in system time, will be updated to block time
                 currentTime := fmt.Println(time.Now().Format(time.RFC850))
 
-                event, eventErr := NewEventFromContractEvent("LockEvent", "Peggy", contractAddress, vLog, currentTime, 0)
+                // Parse contract event data into package
+                event, eventErr := events.NewEventFromContractEvent(
+                    "LogLock",
+                    "PeggyContract",
+                    contractAddress,
+                    vLog,
+                    currentTime,
+                )
                 if eventErr != nil {
-                    log.Fatal(err)
+                    log.Fatal(eventErr)
                 }
 
-                // TODO: pass this event to txs/relayer
-                // TODO: update txs/relayer to accept type 'event'
+                // Print event data to console
+                fmt.Printf(event.ToString())
 
+                // Add the witness
+                errWitness := events.ValidatorMakeClaim(event.payload.Value("_id"))
+                if errWitness != nil {
+                    log.Fatal(errWitness)
+                }
+
+                // Parse the event's payload into a golang struct and initiate the relay
+                result, txErr := txs.parsePayloadAndRelay(cdc, event.eventPayload)
+                if txErr != nil {
+                    log.Fatal(txErr)
+                }
             }
         }
     }
