@@ -1,10 +1,18 @@
 package txs
 
+// --------------------------------------------------------
+//      Parser
+//
+//      Parses structs containing event information into
+//      unsigned transactions for validators to sign, then
+//      relays the data packets as transactions on the
+//      Cosmos Bridge.
+// --------------------------------------------------------
+
 import (
   "log"
 
   "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/events"
-  // "github.com/swishlabsco/cosmos-ethereum-bridge/x/ethbridge/types"
 )
 
 type WitnessClaim struct {
@@ -28,7 +36,6 @@ func ParsePayloadAndRelay(cdc *codec.Codec, validator sdk.accAddress, eventPaylo
       switch(field):
           case "_id":
               // Print the unique id of the event.
-              // TODO: Replace the 'eventHash' in events with this unique id (?)
               fmt.Print(field);
           case "_from":
               ethereumSender, ok := field.Address();
@@ -39,18 +46,15 @@ func ParsePayloadAndRelay(cdc *codec.Codec, validator sdk.accAddress, eventPaylo
           case "_to":
               cosmosRecipient, ok := field.Bytes32();
 
-              // TODO: Convert this to Cosmos address type using 'sdk.AccAddressFromBech32' (?)
-              // -------------------------------------------------------------------------
-              // const bech32Validator, err2 = sdk.AccAddressFromBech32(activeValidator)
-              // if err2 != nil {
-              //     fmt.Errorf("%s", err2)
-              // }
-              // -------------------------------------------------------------------------
+              const bech32CosmosRecipient, err2 = sdk.AccAddressFromBech32(cosmosRecipient)
+              if err2 != nil {
+                  fmt.Errorf("%s", err2)
+              }
 
               if !ok {
                   return eventPayload, errors.New("Error while parsing transaction's Cosmos recipient");
               }
-              witnessClaim.CosmosRecipient = cosmosRecipient;
+              witnessClaim.CosmosRecipient = bech32CosmosRecipient;
           case "_token":
               tokenType, ok := field.Bytes32();
               if !ok {
@@ -62,9 +66,7 @@ func ParsePayloadAndRelay(cdc *codec.Codec, validator sdk.accAddress, eventPaylo
               if !ok {
                   return eventPayload, errors.New("Error while parsing transaction's value")
               }
-              // Correct for wei 10**18
-              //    TODO: Once TokenType is implemented on ethbridgemessage, make sure this
-              //          wei conversion correctly handles erc20 tokens.
+              // Correct for wei 10**18. Does not currently support erc20.
               weiAmount, err = sdk.ParseCoins(strings,Join(strconv.Itoa(amount/(Pow(10.0, 18))), "ethereum")
               if err3 != nil {
                   fmt.Errorf("%s", err3)
@@ -80,9 +82,6 @@ func ParsePayloadAndRelay(cdc *codec.Codec, validator sdk.accAddress, eventPaylo
 
   err := relay(cdc,
         witnessClaim.CosmosRecipient,
-        //witnessClaim.Token,
-          // TODO: Token type doesn't exist on ethbridgeclaim,
-          //       it must be added before can include it in the relay.
         witnessClaim.Validator
         witnessClaim.Nonce,
         witnessClaim.EthereumSender,

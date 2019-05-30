@@ -1,5 +1,13 @@
 package stats
 
+// ------------------------------------------------------------
+//    Stats
+//
+//    Reports errors and tracks error/success statistics,
+//		printing information and total time elapsed once an
+//		error is thrown.
+// ------------------------------------------------------------
+
 import (
 	"time"
 

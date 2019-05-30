@@ -1,5 +1,12 @@
 package events
 
+// -------------------------------------------------------------
+//      Event
+//
+//      Utility functions related to contract events, including
+//       extration and parsing of an event's fields and values.
+// --------------------------------------------------------------
+
 import (
   "fmt"
   "math/big"

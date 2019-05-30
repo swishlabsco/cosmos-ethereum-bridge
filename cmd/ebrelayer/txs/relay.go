@@ -1,5 +1,15 @@
 package txs
 
+// ------------------------------------------------------------
+//      Relay
+//
+//      Builds and encodes EthBridgeClaim Msgs with the
+//      specified variables, before presenting the unsigned
+//      transaction to validators for optional signing.
+//      Once signed, the data packets are sent as transactions
+//      on the Cosmos Bridge.
+// ------------------------------------------------------------
+
 import(
   "fmt"
 

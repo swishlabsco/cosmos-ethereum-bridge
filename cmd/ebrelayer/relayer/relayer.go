@@ -1,5 +1,14 @@
 package relayer
 
+// -----------------------------------------------------
+//      Relayer
+//
+//      Initializes the relayer service, which parses,
+//      encodes, and packages named events on an Ethereum
+//      Smart Contract for validator's to sign and send
+//      to the Cosmos bridge.
+// -----------------------------------------------------
+
 import (
     "context"
     "log"
@@ -12,7 +21,7 @@ import (
 
     "github.com/ethereum/go-ethereum/common"
     "github.com/ethereum/go-ethereum"
-    "github.com/ethereum/go-ethereum/crypto"
+    "golang.org/x/crypto/sha3"
     "github.com/ethereum/go-ethereum/core/types"
 
     "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/txs"
@@ -63,7 +72,7 @@ func InitRelayer(
 
     contractAddress := common.HexToAddress(peggyContractAddress)
     logLockSig := []byte(eventSignature)
-    logLockEvent := crypto.Keccak256Hash(logLockSig)
+    logLockEvent := sha3.Keccak256Hash(logLockSig)
 
     fmt.Printf("\n\nContract Address: %s\n Log Lock Signature: %s\n\n",
                 b, logLockSig)
@@ -131,9 +140,3 @@ func InitRelayer(
     }
     return fmt.Errorf("Error: Relayer timed out.")
 }
-
-// TODO: This is an attempt to solve bug on line 80.
-//       Remove this once resolved
-// func create(addr common.Address) *common.Address {
-//     return &addr
-// }

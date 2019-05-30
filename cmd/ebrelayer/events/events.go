@@ -1,13 +1,17 @@
 package events
+
 // -----------------------------------------------------
+//    Events
+//
 // 		Events maintains a mapping of events to an array
 //		of claims made by validators.
 // -----------------------------------------------------
 
-// Declare the official map: HashMap(EVENT_HASH => []ID_ETH_CLAIM)
+// Declare the official map:(EVENT_HASH => []ETH_CLAIM_ID)
 const officialClaims := make(map[string][]string);
 
 // Adds a new event to the official mapping, allowing claims to be made upon it by validators
+// TODO: Replace the eventHash with the event's unique _id
 func AddEvent(eventHash) {
 	officialClaims[eventHash] = []string
 }

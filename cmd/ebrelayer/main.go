@@ -1,10 +1,15 @@
 package main
 
+// -------------------------------------------------------------
+//      Main (ebrelayer)
+//
+//      Implements CLI commands for the Relayer service, such as
+//      initalization and event relay.
+// -------------------------------------------------------------
+
 import (
-  // "bytes"
   "encoding/base64"
   "encoding/hex"
-  // "encoding/json"
   "fmt"
   "os"
   "strconv"
@@ -30,7 +35,7 @@ import (
 
   app "github.com/swishlabsco/cosmos-ethereum-bridge"
   relayer "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/relayer"
-  // txs "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/txs"
+  txs "github.com/swishlabsco/cosmos-ethereum-bridge/cmd/ebrelayer/txs"
 
   ethbridgecmd "github.com/swishlabsco/cosmos-ethereum-bridge/x/ethbridge/client"
   ethbridge "github.com/swishlabsco/cosmos-ethereum-bridge/x/ethbridge/client/rest"
@@ -121,9 +126,9 @@ func initRelayerCmd(cdc *amino.Codec, mc []sdk.ModuleClients) *cobra.Command {
   }
 
   initRelayerCmd.AddCommand(
-    //TODO: add RelayCommand here
     txs.GetBroadcastCommand(cdc),
-    txs.GetBroadcastCommand(cdc),
+    // TODO: add RelayCommand for validators
+    // txs.GetRelayCommand(cdc),
     client.LineBreak,
   )
 
@@ -134,15 +139,16 @@ func initRelayerCmd(cdc *amino.Codec, mc []sdk.ModuleClients) *cobra.Command {
   return initRelayerCmd
 }
 
-// -------------------------------------------------------------------------
-// Initalizes the relayer service
-// -------------------------------------------------------------------------
-// Testing parameters:
-//    1: chainId = "testing"
-//    2: ethereumProvider = "wss://ropsten.infura.io/ws"
-//    3: peggyContractAddress = "0xe56143b75f4eeac5fa80dc6ffd912d4a3ed21fdf"
-//    4: eventSignature = "LogLock(address,address,uint256)"
-//    5: validator = sdk.AccAddress("cosmos1xdp5tvt7lxh8rf9xx07wy2xlagzhq24ha48xtq")
+// -------------------------------------------------------------------------------------
+//  'init' command, initalizes the relayer service.
+//
+//    Testing parameters:
+//      1: chainId = "testing"
+//      2: ethereumProvider = "wss://ropsten.infura.io/ws"
+//      3: peggyContractAddress = "0xe56143b75f4eeac5fa80dc6ffd912d4a3ed21fdf"
+//      4: eventSignature = "LogLock(address,address,uint256)"
+//      5: validator = sdk.AccAddress("cosmos1xdp5tvt7lxh8rf9xx07wy2xlagzhq24ha48xtq")
+// -------------------------------------------------------------------------------------
 
 func RunRelayerCmd(cmd *cobra.Command, args []string) error {
   if(len(args) != 5) {
